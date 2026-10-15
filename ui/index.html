@@ -583,6 +583,9 @@
   const API = 'http://localhost:8080';
   const ML_API = 'http://localhost:8001';
 
+  // Escape untrusted text before inserting it into innerHTML (XSS guard)
+  const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
   // Health check
   async function checkHealth() {
     try {
@@ -632,7 +635,7 @@
     document.getElementById('resultArea').innerHTML = `
       <div class="loading">
         <div class="loading-bar"></div>
-        <span>generating response via ${model}...</span>
+        <span>generating response via ${esc(model)}...</span>
       </div>
     `;
 
@@ -649,7 +652,7 @@
     } catch(e) {
       document.getElementById('resultArea').innerHTML = `
         <div class="answer-box" style="border-left-color: var(--red);">
-          <span style="color:var(--red)">error:</span> ${e.message}
+          <span style="color:var(--red)">error:</span> ${esc(e.message)}
           <br><br>
           <span style="color:var(--text-dim); font-size:11px;">make sure go backend is running on :8080</span>
         </div>
@@ -667,10 +670,10 @@
     const sourcesHtml = data.sources.map((s, i) => `
       <div class="source-item" onclick="toggleSource(this)">
         <div class="source-header">
-          <span class="source-id">arxiv:${s.arxiv_id} · chunk ${i+1}</span>
+          <span class="source-id">arxiv:${esc(s.arxiv_id)} · chunk ${i+1}</span>
           <span class="source-score">score <strong>${s.score.toFixed(4)}</strong></span>
         </div>
-        <div class="source-text">${s.text}</div>
+        <div class="source-text">${esc(s.text)}</div>
       </div>
     `).join('');
 
@@ -681,10 +684,10 @@
           <div class="result-meta">
             <span>retrieval <strong>${retrievalSec}s</strong></span>
             <span>generation <strong>${genSec}s</strong></span>
-            <span>model <strong>${data.model}</strong></span>
+            <span>model <strong>${esc(data.model)}</strong></span>
           </div>
         </div>
-        <div class="answer-box">${data.answer}</div>
+        <div class="answer-box">${esc(data.answer)}</div>
         <div class="sources-label">// sources (${data.sources.length})</div>
         ${sourcesHtml}
       </div>
@@ -736,7 +739,7 @@
     const now = new Date().toTimeString().split(' ')[0];
     const div = document.createElement('div');
     div.className = 'log-line';
-    div.innerHTML = `<span class="log-time">${now}</span><span class="log-${type}">${msg}</span>`;
+    div.innerHTML = `<span class="log-time">${now}</span><span class="log-${type}">${esc(msg)}</span>`;
     terminal.appendChild(div);
     terminal.scrollTop = terminal.scrollHeight;
   }
