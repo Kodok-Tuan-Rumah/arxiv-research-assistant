@@ -1,7 +1,8 @@
 import logging
+import re
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 import state as app_state
 from engine.db import get_connection, insert_chunks, upsert_paper
@@ -13,10 +14,26 @@ from engine.retrieval.qdrant_client import ensure_collection, get_client, upsert
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+ARXIV_ID_PATTERN = re.compile(r"^\d{4}\.\d{4,5}(v\d+)?$")
+
 class IngestRequest(BaseModel):
-    arxiv_ids: list[str]
-    chunk_size: int = 512
-    overlap: int = 50
+    arxiv_ids: list[str] = Field(..., max_length=50)
+    chunk_size: int = Field(512, gt=0, le=10_000)
+    overlap: int = Field(50, ge=0)
+
+    @model_validator(mode="after")
+    def _validate_overlap(self):
+        if self.overlap >= self.chunk_size:
+            raise ValueError("overlap must be < chunk_size")
+        return self
+
+    @field_validator("arxiv_ids")
+    @classmethod
+    def _validate_arxiv_ids(cls, value: list[str]) -> list[str]:
+        invalid = [arxiv_id for arxiv_id in value if not ARXIV_ID_PATTERN.match(arxiv_id)]
+        if invalid:
+            raise ValueError(f"invalid arxiv id(s): {', '.join(invalid[:5])}")
+        return value
 
 class IngestResponse(BaseModel):
     ingested: list[str]
