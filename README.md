@@ -1,6 +1,6 @@
 # ArXiv Research Assistant
 
-> Production-grade RAG system for querying academic papers — built with Go, Python, and a full observability stack.
+> RAG system for querying academic papers — Go backend, Python ML service, and a Prometheus/Grafana observability stack.
 
 ![CI](https://github.com/malikimayzar/arxiv-research-assistant/actions/workflows/test.yml/badge.svg)
 ![Lint](https://github.com/malikimayzar/arxiv-research-assistant/actions/workflows/lint.yml/badge.svg)
@@ -11,7 +11,7 @@
 
 A system that lets you query academic papers in natural language. You ingest papers from ArXiv, they get chunked, embedded, and stored in a vector database. When you ask a question, the system retrieves relevant chunks and generates an answer using a local LLM.
 
-Built to be **auditable** (every query logged), **observable** (Prometheus + Grafana), and **resilient** (circuit breaker, chaos tested).
+Built to be **auditable** (queries logged best-effort), **observable** (Prometheus + Grafana), and **resilient** (circuit breaker, documented failure scenarios).
 
 ---
 
@@ -22,16 +22,16 @@ Browser / CLI
      ▼
 Go Fiber API :8080
      │
-     ├── PostgreSQL :5432   (paper metadata, query logs, versioning)
+     ├── PostgreSQL :5432   (paper metadata, chunks, query logs)
      │
      └── Python FastAPI :8001
                │
                ├── Qdrant :6333      (vector search)
                ├── Ollama :11434     (local LLM)
-               └── Redis :6379       (cache)
+               └── Redis :6379       (cache — planned, not wired yet)
 
 Prometheus :9090  ←  scrapes Go + Python metrics
-Grafana :3000     ←  dashboards
+Grafana :3000     ←  UI (no dashboards provisioned)
 ```
 
 ---
@@ -43,17 +43,17 @@ Grafana :3000     ←  dashboards
 | Backend | Go + Fiber | Concurrency, explicit error handling, performance |
 | ML Service | Python + FastAPI | Best ML ecosystem, clean service boundary |
 | Vector DB | Qdrant | Production-grade, filterable, REST API |
-| Relational DB | PostgreSQL | Metadata, query logs, prompt/embedding versioning |
-| Cache | Redis | Embedding cache, session |
-| LLM | Ollama (phi3:mini) | Fully local, no API cost |
-| Monitoring | Prometheus + Grafana | Full observability stack |
-| CI/CD | GitHub Actions | Lint + Test on every push |
+| Relational DB | PostgreSQL | Metadata, chunks, query logs |
+| Cache | Redis | Planned embedding/session cache — container runs, no code uses it yet |
+| LLM | Ollama (phi3:mini); Groq optional | Local by default, no API cost; LLM_PROVIDER=groq switches to cloud |
+| Monitoring | Prometheus + Grafana | Prometheus scrapes both services; Grafana runs without provisioned dashboards |
+| CI/CD | GitHub Actions | Lint + Go tests on every push |
 
 ---
 
 ## Quick Start
 
-**Prerequisites:** Go 1.22+, Python 3.12+, Docker, Ollama
+**Prerequisites:** Go 1.23+, Python 3.12+, Docker, Ollama
 ```bash
 # 1. Clone
 git clone https://github.com/malikimayzar/arxiv-research-assistant.git
@@ -88,7 +88,7 @@ curl -X POST http://localhost:8080/query \
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/health` | System health + service status |
+| GET | `/health` | Health check (pings Postgres + ML; Qdrant status is a placeholder) |
 | GET | `/papers` | List ingested papers |
 | GET | `/papers/:id` | Get paper by ID |
 | DELETE | `/papers/:id` | Delete paper |
@@ -104,25 +104,32 @@ curl -X POST http://localhost:8080/query \
 | POST | `/embed` | Generate embeddings |
 | POST | `/chunk` | Chunk text |
 | POST | `/query` | RAG pipeline |
-| POST | `/evaluate` | Faithfulness scoring |
+| POST | `/evaluate` | Faithfulness scoring (experimental — see note below) |
+| GET | `/health` | Embedding model load status |
 | GET | `/metrics` | Prometheus metrics |
+
+> Known limitation: `/evaluate` runs only against the local Ollama model; when the
+> model output does not match the expected format, the score falls back to a neutral
+> 0.5. Treat these scores as experimental until the evaluator is hardened.
 
 ---
 
 ## Observability
 
-Prometheus scrapes both services. Grafana dashboards at `http://localhost:3000`.
+Prometheus scrapes both services. Grafana runs at `http://localhost:3000` (no dashboards provisioned yet).
 
 | Metric | Type | What it detects |
 |--------|------|-----------------|
 | `http_request_duration_seconds` | Histogram | Slow endpoints |
 | `http_requests_total` | Counter | Traffic + error rate |
-| `query_faithfulness_score` | Gauge | Answer quality trend |
 | `qdrant_search_duration_seconds` | Histogram | Vector search performance |
 | `ollama_generation_duration_seconds` | Histogram | LLM latency |
 | `failure_mode_total` | Counter | correct / insufficient_ctx / error |
 | `active_goroutines` | Gauge | Goroutine leak detection |
 | `postgres_connections_active` | Gauge | Connection pool exhaustion |
+
+> `query_faithfulness_score` is registered but not populated yet — evaluation is not
+> wired into the query path, so the gauge would read 0.
 
 ---
 
@@ -139,13 +146,13 @@ bash scripts/failure_inject.sh fill-disk         # Scenario 5: Disk pressure
 bash scripts/failure_inject.sh status            # Check system
 ```
 
-Circuit breaker trips after 5 failures — ML service down returns graceful error instead of hanging.
+The ML client's circuit breaker opens when a 60 s window has at least 5 requests with a ≥60% failure ratio; an open breaker returns an error immediately instead of waiting on a down ML service.
 
 ---
 
 ## Ablation Study
 
-Compare answer quality across different retrieval configs:
+Compare retrieval configurations by latency and sample answers (no quality metric yet):
 ```bash
 make ablation
 ```
@@ -180,13 +187,12 @@ arxiv-research-assistant/
 │   │   ├── api/              # HTTP handlers (health, papers, query)
 │   │   ├── client/           # ML service client + circuit breaker
 │   │   ├── middleware/       # Prometheus metrics, request ID
-│   │   ├── models/           # Domain models
 │   │   └── repository/       # PostgreSQL (papers, query_logs, db)
 │   └── migrations/           # SQL migrations
 ├── python-ml/
 │   ├── engine/
 │   │   ├── evaluation/       # Faithfulness scoring
-│   │   ├── generation/       # Ollama client
+│   │   ├── generation/       # LLM clients (Ollama, Groq)
 │   │   ├── ingestion/        # ArXiv fetcher, PDF parser, chunker
 │   │   └── retrieval/        # Qdrant client
 │   ├── routers/              # FastAPI endpoints
@@ -194,16 +200,11 @@ arxiv-research-assistant/
 │   └── state.py              # Shared model state
 ├── infra/
 │   ├── docker-compose.yml    # All services
-│   ├── grafana/              # Dashboard configs
 │   ├── postgres/init.sql     # DB schema
 │   └── prometheus/           # Scrape config
 ├── scripts/
 │   ├── failure_inject.sh     # Chaos testing
 │   └── ablation_study.sh     # Retrieval benchmarks
-├── tests/
-│   ├── unit/
-│   ├── integration/
-│   └── eval/
 ├── docs/
 │   ├── architecture.md
 │   ├── threat_model.md
@@ -214,6 +215,6 @@ arxiv-research-assistant/
 
 ---
 
-**Live Demo:** https://arxiv-research-assistant-production.up.railway.app
+**Live Demo:** temporarily offline.
 
 *Built by [Maliki Mayzar](https://github.com/malikimayzar) — 2026*
