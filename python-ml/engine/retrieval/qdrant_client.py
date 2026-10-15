@@ -23,15 +23,21 @@ def ensure_collection(client: QdrantClient):
     else:
         logger.info(f"Collection already exists: {COLLECTION_NAME}")
 
-def upsert_chunks(client: QdrantClient, chunks: list[dict]) -> list[str]:
-    points = []
-    ids = []
+def compute_point_ids(arxiv_id: str, count: int) -> list[str]:
+    """Deterministic point ids: same paper + position always yields the same id."""
+    return [
+        str(uuid.uuid5(uuid.NAMESPACE_URL, f"{arxiv_id}:{i}"))
+        for i in range(count)
+    ]
 
-    for chunk in chunks:
-        point_id = str(uuid.uuid4())
-        ids.append(point_id)
-        points.append(PointStruct(
-            id=point_id,
+def upsert_chunks(client: QdrantClient, chunks: list[dict]) -> list[str]:
+    if not chunks:
+        return []
+
+    ids = compute_point_ids(chunks[0].get("arxiv_id", ""), len(chunks))
+    points = [
+        PointStruct(
+            id=ids[i],
             vector=chunk["embedding"],
             payload={
                 "chunk_id": chunk.get("chunk_id", ""),
@@ -40,11 +46,27 @@ def upsert_chunks(client: QdrantClient, chunks: list[dict]) -> list[str]:
                 "text": chunk["text"],
                 "categories": chunk.get("categories", []),
             }
-        ))
+        )
+        for i, chunk in enumerate(chunks)
+    ]
 
     client.upsert(collection_name=COLLECTION_NAME, points=points)
     logger.info(f"Upserted {len(points)} chunks to Qdrant")
     return ids
+
+def delete_by_arxiv_id(client: QdrantClient, arxiv_id: str) -> None:
+    """Remove all stored vectors of a paper (called before re-ingest to avoid duplicates)."""
+    from qdrant_client.models import FieldCondition, Filter, FilterSelector, MatchValue
+
+    client.delete(
+        collection_name=COLLECTION_NAME,
+        points_selector=FilterSelector(
+            filter=Filter(
+                must=[FieldCondition(key="arxiv_id", match=MatchValue(value=arxiv_id))]
+            )
+        ),
+    )
+    logger.info(f"Deleted stale vectors for {arxiv_id}")
 
 def search(client: QdrantClient, query_vector: list[float], top_k: int = 5, arxiv_id: str | None = None):
     from qdrant_client.models import FieldCondition, Filter, MatchValue

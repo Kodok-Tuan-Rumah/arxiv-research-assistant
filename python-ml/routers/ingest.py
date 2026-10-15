@@ -9,7 +9,12 @@ from engine.db import get_connection, insert_chunks, upsert_paper
 from engine.ingestion.arxiv_fetcher import fetch_metadata
 from engine.ingestion.chunker import chunk_text
 from engine.ingestion.pdf_parser import download_and_parse_pdf
-from engine.retrieval.qdrant_client import ensure_collection, get_client, upsert_chunks
+from engine.retrieval.qdrant_client import (
+    delete_by_arxiv_id,
+    ensure_collection,
+    get_client,
+    upsert_chunks,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -81,6 +86,8 @@ def ingest(request: IngestRequest):
                     }
                     for i, chunk in enumerate(chunks)
                 ]
+                # Remove stale vectors so re-ingest cannot duplicate points
+                delete_by_arxiv_id(qdrant, paper.arxiv_id)
                 qdrant_ids = upsert_chunks(qdrant, chunk_dicts)
 
                 # Store metadata in PostgreSQL
