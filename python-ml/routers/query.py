@@ -29,12 +29,10 @@ def get_provider():
     return os.getenv("LLM_PROVIDER", "ollama")
 
 def embed_query(query: str) -> list:
-    if app_state.model is not None:
-        return app_state.model.encode([query])[0].tolist()
-    # Cloud mode — use Groq embeddings via simple httpx call
-    # Fallback: use zeros (not ideal but won't crash)
-    logger.warning("No embedding model available, using zero vector")
-    return [0.0] * 384
+    if app_state.model is None:
+        # Startup loads the model unconditionally; this guard is defensive.
+        raise HTTPException(status_code=503, detail="embedding model not loaded")
+    return app_state.model.encode([query])[0].tolist()
 
 @router.post("/query", response_model=QueryResponse)
 def query(payload: QueryRequest, request: Request):

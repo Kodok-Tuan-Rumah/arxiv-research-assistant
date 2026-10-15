@@ -6,6 +6,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from sentence_transformers import SentenceTransformer
 
 import state
+from engine.retrieval.qdrant_client import ensure_collection, get_client
 from routers import chunk, embed, evaluate, ingest, papers, query
 
 logging.basicConfig(level=logging.INFO)
@@ -13,9 +14,14 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Hard requirements at startup: both the embedder and Qdrant must be
+    # reachable, otherwise the service fails fast instead of degrading.
     logger.info("Loading embedding model...")
     state.model = SentenceTransformer("all-MiniLM-L6-v2")
     logger.info("Embedding model loaded")
+
+    ensure_collection(get_client())
+    logger.info("Qdrant collection ready")
     yield
 
 app = FastAPI(title="ArXiv ML Service", version="0.1.0", lifespan=lifespan)
