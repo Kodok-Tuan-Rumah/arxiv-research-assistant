@@ -1,7 +1,8 @@
-import arxiv
 import logging
 from dataclasses import dataclass
 from datetime import date
+
+import arxiv
 
 logger = logging.getLogger(__name__)
 

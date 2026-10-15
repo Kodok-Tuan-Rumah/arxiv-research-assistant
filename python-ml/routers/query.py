@@ -1,11 +1,13 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 import logging
 import os
 import time
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
 import state as app_state
+from engine.generation import groq_client, ollama_client
 from engine.retrieval.qdrant_client import get_client, search
-from engine.generation import ollama_client, groq_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -58,7 +60,7 @@ def query(request: QueryRequest):
             generation = groq_client.generate(request.query, context_chunks, model)
         else:
             generation = ollama_client.generate(request.query, context_chunks, request.model)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — surface any provider failure as HTTP 500
         logger.error(f"Generation failed ({provider}): {e}")
         raise HTTPException(status_code=500, detail=f"generation failed: {e}")
 

@@ -1,8 +1,9 @@
+import logging
+import os
+import tempfile
+
 import fitz  # pymupdf
 import httpx
-import logging
-import tempfile
-import os
 
 logger = logging.getLogger(__name__)
 

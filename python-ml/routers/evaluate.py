@@ -1,6 +1,8 @@
+import logging
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-import logging
+
 from engine.evaluation.faithfulness import evaluate_faithfulness
 
 logger = logging.getLogger(__name__)

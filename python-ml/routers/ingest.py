@@ -1,12 +1,14 @@
+import logging
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-import logging
+
 import state as app_state
+from engine.db import get_connection, insert_chunks, upsert_paper
 from engine.ingestion.arxiv_fetcher import fetch_metadata
-from engine.ingestion.pdf_parser import download_and_parse_pdf
 from engine.ingestion.chunker import chunk_text
-from engine.retrieval.qdrant_client import get_client, ensure_collection, upsert_chunks
-from engine.db import get_connection, upsert_paper, insert_chunks
+from engine.ingestion.pdf_parser import download_and_parse_pdf
+from engine.retrieval.qdrant_client import ensure_collection, get_client, upsert_chunks
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -73,7 +75,7 @@ def ingest(request: IngestRequest):
                 total_chunks += len(chunks)
                 logger.info(f"✅ Ingested {paper.arxiv_id}: {len(chunks)} chunks")
 
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — keep ingesting the remaining papers
                 conn.rollback()
                 logger.error(f"❌ Failed to ingest {paper.arxiv_id}: {e}")
                 failed.append(paper.arxiv_id)

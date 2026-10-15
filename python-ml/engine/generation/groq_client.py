@@ -1,7 +1,7 @@
 import logging
 import os
 import time
-from typing import List, Dict, Any
+from typing import Any
 
 from groq import Groq
 
@@ -12,7 +12,7 @@ DEFAULT_MODEL = "llama-3.3-70b-versatile"
 class GroqError(Exception):
     pass
 
-def build_prompt(query: str, context_chunks: List[str]) -> str:
+def build_prompt(query: str, context_chunks: list[str]) -> str:
     safe_chunks = [
         chunk.replace("\n", " ").strip()[:500]
         for chunk in context_chunks[:5]
@@ -30,9 +30,9 @@ def build_prompt(query: str, context_chunks: List[str]) -> str:
 
 def generate(
     query: str,
-    context_chunks: List[str],
+    context_chunks: list[str],
     model: str = DEFAULT_MODEL,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         raise GroqError("GROQ_API_KEY not set")

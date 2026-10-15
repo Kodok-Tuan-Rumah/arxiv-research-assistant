@@ -1,7 +1,8 @@
-import httpx
 import logging
 import time
-from typing import List, Dict, Any
+from typing import Any
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -11,7 +12,7 @@ DEFAULT_MODEL = "phi3:mini"
 class OllamaError(Exception):
     pass
 
-def build_prompt(query: str, context_chunks: List[str]) -> str:
+def build_prompt(query: str, context_chunks: list[str]) -> str:
     safe_chunks = [
         chunk.replace("\n", " ").strip()[:800]
         for chunk in context_chunks[:5]
@@ -29,9 +30,9 @@ def build_prompt(query: str, context_chunks: List[str]) -> str:
 
 def generate(
     query: str,
-    context_chunks: List[str],
+    context_chunks: list[str],
     model: str = DEFAULT_MODEL,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
 
     if not query.strip():
         raise ValueError("Query is empty")

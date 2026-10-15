@@ -1,7 +1,8 @@
-from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct
 import logging
 import uuid
+
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, PointStruct, VectorParams
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +46,8 @@ def upsert_chunks(client: QdrantClient, chunks: list[dict]) -> list[str]:
     logger.info(f"Upserted {len(points)} chunks to Qdrant")
     return ids
 
-def search(client: QdrantClient, query_vector: list[float], top_k: int = 5, arxiv_id: str = None):
-    from qdrant_client.models import Filter, FieldCondition, MatchValue
+def search(client: QdrantClient, query_vector: list[float], top_k: int = 5, arxiv_id: str | None = None):
+    from qdrant_client.models import FieldCondition, Filter, MatchValue
 
     query_filter = None
     if arxiv_id:

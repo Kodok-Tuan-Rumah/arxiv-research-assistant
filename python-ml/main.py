@@ -1,10 +1,12 @@
-from fastapi import FastAPI
-from contextlib import asynccontextmanager
-from sentence_transformers import SentenceTransformer
-from prometheus_fastapi_instrumentator import Instrumentator
-from routers import embed, chunk, ingest, query, evaluate
-import state
 import logging
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from prometheus_fastapi_instrumentator import Instrumentator
+from sentence_transformers import SentenceTransformer
+
+import state
+from routers import chunk, embed, evaluate, ingest, query
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
