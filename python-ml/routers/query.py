@@ -2,7 +2,7 @@ import logging
 import os
 import time
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 import state as app_state
@@ -37,15 +37,24 @@ def embed_query(query: str) -> list:
     return [0.0] * 384
 
 @router.post("/query", response_model=QueryResponse)
-def query(request: QueryRequest):
-    if not request.query.strip():
+def query(payload: QueryRequest, request: Request):
+    request_id = request.headers.get("x-request-id", "-")
+
+    if not payload.query.strip():
         raise HTTPException(status_code=400, detail="query cannot be empty")
 
+    logger.info(
+        "[%s] query received (chars=%d, top_k=%d)",
+        request_id,
+        len(payload.query),
+        payload.top_k,
+    )
+
     t0 = time.time()
-    query_vector = embed_query(request.query)
+    query_vector = embed_query(payload.query)
 
     qdrant = get_client()
-    results = search(qdrant, query_vector, request.top_k, request.arxiv_id)
+    results = search(qdrant, query_vector, payload.top_k, payload.arxiv_id)
     retrieval_ms = int((time.time() - t0) * 1000)
 
     if not results:
@@ -57,12 +66,12 @@ def query(request: QueryRequest):
     try:
         if provider == "groq":
             model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-            generation = groq_client.generate(request.query, context_chunks, model)
+            generation = groq_client.generate(payload.query, context_chunks, model)
         else:
-            generation = ollama_client.generate(request.query, context_chunks, request.model)
-    except Exception as e:  # noqa: BLE001 — surface any provider failure as HTTP 500
-        logger.error(f"Generation failed ({provider}): {e}")
-        raise HTTPException(status_code=500, detail=f"generation failed: {e}")
+            generation = ollama_client.generate(payload.query, context_chunks, payload.model)
+    except Exception:
+        logger.exception("[%s] Generation failed (%s)", request_id, provider)
+        raise HTTPException(status_code=500, detail="generation failed")
 
     return QueryResponse(
         answer=generation["answer"],

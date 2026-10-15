@@ -146,7 +146,7 @@ type QueryMLResponse struct {
 	Model        string   `json:"model"`
 }
 
-func (c *MLClient) Query(query string, topK int, model string, arxivID string) (*QueryMLResponse, error) {
+func (c *MLClient) Query(query string, topK int, model string, arxivID string, requestID string) (*QueryMLResponse, error) {
 	body, err := json.Marshal(QueryRequest{
 		Query:   query,
 		TopK:    topK,
@@ -158,11 +158,16 @@ func (c *MLClient) Query(query string, topK int, model string, arxivID string) (
 	}
 
 	result, err := c.queryCB.Execute(func() (interface{}, error) {
-		resp, err := c.queryClient.Post(
-			c.baseURL+"/query",
-			"application/json",
-			bytes.NewBuffer(body),
-		)
+		req, err := http.NewRequest(http.MethodPost, c.baseURL+"/query", bytes.NewBuffer(body))
+		if err != nil {
+			return nil, fmt.Errorf("failed to build request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if requestID != "" {
+			req.Header.Set("X-Request-ID", requestID)
+		}
+
+		resp, err := c.queryClient.Do(req)
 		if err != nil {
 			return nil, fmt.Errorf("ml service query failed: %w", err)
 		}

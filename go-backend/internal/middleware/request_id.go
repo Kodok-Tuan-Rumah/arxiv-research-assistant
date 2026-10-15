@@ -10,6 +10,7 @@ func RequestID() fiber.Handler {
 		requestID := uuid.New().String()
 		c.Set("X-Request-ID", requestID)
 		c.Locals("requestID", requestID)
+		c.Response().Header.Set("X-Request-ID", requestID)
 		return c.Next()
 	}
 }

@@ -29,6 +29,8 @@ type QueryResponse struct {
 
 func QueryHandler(ml *client.MLClient, logRepo repository.QueryLogRepository) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		requestID, _ := c.Locals("requestID").(string)
+
 		var req QueryRequest
 		if err := c.BodyParser(&req); err != nil {
 			return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
@@ -44,10 +46,11 @@ func QueryHandler(ml *client.MLClient, logRepo repository.QueryLogRepository) fi
 			req.Model = "phi3:mini"
 		}
 
-		result, err := ml.Query(req.Query, req.TopK, req.Model, req.ArxivID)
+		result, err := ml.Query(req.Query, req.TopK, req.Model, req.ArxivID, requestID)
 		if err != nil {
 			middleware.IncFailureMode("error")
-			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+			fmt.Printf("⚠️  query failed (request_id=%s): %v\n", requestID, err)
+			return fiber.NewError(fiber.StatusInternalServerError, "internal error")
 		}
 
 		// Observe metrics
