@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/sony/gobreaker"
@@ -144,6 +145,25 @@ type QueryMLResponse struct {
 	RetrievalMs  int      `json:"retrieval_ms"`
 	GenerationMs int      `json:"generation_ms"`
 	Model        string   `json:"model"`
+}
+
+// DeletePaper purges every vector of a paper in the ML service (idempotent).
+func (c *MLClient) DeletePaper(arxivID string) error {
+	req, err := http.NewRequest(http.MethodDelete, c.baseURL+"/papers/"+url.PathEscape(arxivID), nil)
+	if err != nil {
+		return fmt.Errorf("failed to build request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("ml service delete failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("ml service returned status %d", resp.StatusCode)
+	}
+	return nil
 }
 
 func (c *MLClient) Query(query string, topK int, model string, arxivID string, requestID string) (*QueryMLResponse, error) {

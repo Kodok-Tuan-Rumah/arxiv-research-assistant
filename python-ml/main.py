@@ -6,7 +6,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from sentence_transformers import SentenceTransformer
 
 import state
-from routers import chunk, embed, evaluate, ingest, query
+from routers import chunk, embed, evaluate, ingest, papers, query
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -25,6 +25,7 @@ Instrumentator().instrument(app).expose(app)
 app.include_router(embed.router)
 app.include_router(chunk.router)
 app.include_router(ingest.router)
+app.include_router(papers.router)
 app.include_router(query.router)
 app.include_router(evaluate.router)
 

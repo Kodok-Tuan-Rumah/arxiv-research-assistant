@@ -11,11 +11,11 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/malikimayzar/arxiv-research-assistant/internal/api"
 	"github.com/malikimayzar/arxiv-research-assistant/internal/client"
 	"github.com/malikimayzar/arxiv-research-assistant/internal/middleware"
 	"github.com/malikimayzar/arxiv-research-assistant/internal/repository"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -59,7 +59,7 @@ func main() {
 	app.Get("/health", api.HealthHandler(db, mlClient))
 
 	paperRepo := repository.NewPaperRepository(db)
-	papersHandler := api.NewPapersHandler(paperRepo)
+	papersHandler := api.NewPapersHandler(paperRepo, mlClient)
 	app.Get("/papers", papersHandler.List)
 	app.Get("/papers/:id", papersHandler.GetByID)
 	app.Delete("/papers/:id", papersHandler.Delete)

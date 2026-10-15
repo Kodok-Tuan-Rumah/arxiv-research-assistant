@@ -1,3 +1,4 @@
+import pytest
 from qdrant_client.models import FilterSelector
 
 from engine.retrieval.qdrant_client import (
@@ -50,6 +51,23 @@ def test_upsert_chunks_uses_deterministic_ids():
 
     assert ids_first == ids_second == compute_point_ids("2312.10997", 3)
     assert len(client.upserts) == 2
+
+
+def test_upsert_chunks_accepts_explicit_ids():
+    client = FakeQdrant()
+    ids = compute_point_ids("2312.10997", 2)
+
+    returned = upsert_chunks(client, _chunks(2), ids=ids)
+
+    assert returned == ids
+    assert [point.id for point in client.upserts[0][1]] == ids
+
+
+def test_upsert_chunks_rejects_mismatched_ids():
+    client = FakeQdrant()
+
+    with pytest.raises(ValueError):
+        upsert_chunks(client, _chunks(2), ids=["only-one"])
 
 
 def test_delete_by_arxiv_id_targets_payload_filter():

@@ -30,11 +30,15 @@ def compute_point_ids(arxiv_id: str, count: int) -> list[str]:
         for i in range(count)
     ]
 
-def upsert_chunks(client: QdrantClient, chunks: list[dict]) -> list[str]:
+def upsert_chunks(client: QdrantClient, chunks: list[dict], ids: list[str] | None = None) -> list[str]:
     if not chunks:
         return []
 
-    ids = compute_point_ids(chunks[0].get("arxiv_id", ""), len(chunks))
+    if ids is None:
+        ids = compute_point_ids(chunks[0].get("arxiv_id", ""), len(chunks))
+    elif len(ids) != len(chunks):
+        raise ValueError("ids must have the same length as chunks")
+
     points = [
         PointStruct(
             id=ids[i],

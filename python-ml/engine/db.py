@@ -49,3 +49,9 @@ def insert_chunks(conn, paper_id: str, chunks: list[str], qdrant_ids: list[str])
             (paper_id, i, chunk, qdrant_ids[i] if i < len(qdrant_ids) else None, len(chunk))
             for i, chunk in enumerate(chunks)
         ])
+
+def delete_paper(conn, paper_id: str) -> None:
+    """Delete a paper row (chunks cascade via FK). Used to compensate a failed
+    Qdrant write after the PostgreSQL commit."""
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM papers WHERE id = %s", (paper_id,))
