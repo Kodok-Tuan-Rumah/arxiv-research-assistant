@@ -96,6 +96,12 @@ curl -X POST http://localhost:8080/query \
 | GET | `/query/history` | Query logs |
 | GET | `/metrics` | Prometheus metrics |
 
+> Query contract: an empty retrieval is a valid result, not an error. When the ML
+> service finds no relevant chunks, `/query` returns `200` with
+> `insufficient_context: true`, `answer: "No relevant chunks found."` and an empty
+> `sources` array. ML-service failures (5xx, transport errors, open circuit
+> breaker) return `503` with a generic message.
+
 ### Python ML Service `:8001`
 
 | Method | Endpoint | Description |
@@ -146,7 +152,7 @@ bash scripts/failure_inject.sh fill-disk         # Scenario 5: Disk pressure
 bash scripts/failure_inject.sh status            # Check system
 ```
 
-The ML client's circuit breaker opens when a 60 s window has at least 5 requests with a ≥60% failure ratio; an open breaker returns an error immediately instead of waiting on a down ML service.
+The ML client's circuit breaker opens when a 60 s window has at least 5 requests with a ≥60% failure ratio; an open breaker returns an error immediately instead of waiting on a down ML service. Only transport errors and 5xx count as failures — 4xx answers (e.g. an empty retrieval) pass through without tripping the breaker.
 
 ---
 

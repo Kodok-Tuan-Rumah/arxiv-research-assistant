@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/sony/gobreaker"
@@ -166,6 +168,33 @@ func (c *MLClient) DeletePaper(arxivID string) error {
 	return nil
 }
 
+// StatusError represents a 4xx response from the ML service. These are valid
+// service answers (the request was understood, the rejection is deliberate),
+// so the caller receives them as-is and they never count as breaker failures.
+type StatusError struct {
+	StatusCode int
+	Detail     string
+}
+
+func (e *StatusError) Error() string {
+	if e.Detail != "" {
+		return fmt.Sprintf("ml service returned status %d: %s", e.StatusCode, e.Detail)
+	}
+	return fmt.Sprintf("ml service returned status %d", e.StatusCode)
+}
+
+// extractDetail pulls FastAPI's `detail` field out of an error body, falling
+// back to the trimmed raw body when the shape differs.
+func extractDetail(body []byte) string {
+	var payload struct {
+		Detail string `json:"detail"`
+	}
+	if err := json.Unmarshal(body, &payload); err == nil && payload.Detail != "" {
+		return payload.Detail
+	}
+	return strings.TrimSpace(string(body))
+}
+
 func (c *MLClient) Query(query string, topK int, model string, arxivID string, requestID string) (*QueryMLResponse, error) {
 	body, err := json.Marshal(QueryRequest{
 		Query:   query,
@@ -193,8 +222,16 @@ func (c *MLClient) Query(query string, topK int, model string, arxivID string, r
 		}
 		defer resp.Body.Close()
 
-		if resp.StatusCode != http.StatusOK {
+		// 5xx = service failure → counts toward the breaker.
+		if resp.StatusCode >= http.StatusInternalServerError {
 			return nil, fmt.Errorf("ml service returned status %d", resp.StatusCode)
+		}
+
+		// 4xx = deliberate answer (e.g. 404 "No relevant chunks found") → hand
+		// it back without tripping the breaker.
+		if resp.StatusCode >= http.StatusBadRequest {
+			raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+			return &StatusError{StatusCode: resp.StatusCode, Detail: extractDetail(raw)}, nil
 		}
 
 		var result QueryMLResponse
@@ -211,7 +248,14 @@ func (c *MLClient) Query(query string, topK int, model string, arxivID string, r
 		return nil, err
 	}
 
-	return result.(*QueryMLResponse), nil
+	switch v := result.(type) {
+	case *QueryMLResponse:
+		return v, nil
+	case *StatusError:
+		return nil, v
+	default:
+		return nil, fmt.Errorf("unexpected result type %T", result)
+	}
 }
 
 func (c *MLClient) Ping() error {

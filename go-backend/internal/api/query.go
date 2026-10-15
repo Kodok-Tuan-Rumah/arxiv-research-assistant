@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -19,12 +20,13 @@ type QueryRequest struct {
 }
 
 type QueryResponse struct {
-	Answer       string          `json:"answer"`
-	Sources      []client.Source `json:"sources"`
-	RetrievalMs  int             `json:"retrieval_ms"`
-	GenerationMs int             `json:"generation_ms"`
-	Model        string          `json:"model"`
-	LogID        string          `json:"log_id,omitempty"`
+	Answer              string          `json:"answer"`
+	Sources             []client.Source `json:"sources"`
+	RetrievalMs         int             `json:"retrieval_ms"`
+	GenerationMs        int             `json:"generation_ms"`
+	Model               string          `json:"model"`
+	LogID               string          `json:"log_id,omitempty"`
+	InsufficientContext bool            `json:"insufficient_context,omitempty"`
 }
 
 func QueryHandler(ml *client.MLClient, logRepo repository.QueryLogRepository) fiber.Handler {
@@ -48,9 +50,22 @@ func QueryHandler(ml *client.MLClient, logRepo repository.QueryLogRepository) fi
 
 		result, err := ml.Query(req.Query, req.TopK, req.Model, req.ArxivID, requestID)
 		if err != nil {
+			// Empty retrieval is a valid outcome, not a failure: answer 200 with
+			// insufficient_context so clients can render it without an error box.
+			var statusErr *client.StatusError
+			if errors.As(err, &statusErr) && statusErr.StatusCode == fiber.StatusNotFound {
+				middleware.IncFailureMode("insufficient_ctx")
+				return c.JSON(QueryResponse{
+					Answer:              "No relevant chunks found.",
+					Sources:             []client.Source{},
+					Model:               req.Model,
+					InsufficientContext: true,
+				})
+			}
+
 			middleware.IncFailureMode("error")
 			fmt.Printf("⚠️  query failed (request_id=%s): %v\n", requestID, err)
-			return fiber.NewError(fiber.StatusInternalServerError, "internal error")
+			return fiber.NewError(fiber.StatusServiceUnavailable, "ml service unavailable")
 		}
 
 		// Observe metrics
