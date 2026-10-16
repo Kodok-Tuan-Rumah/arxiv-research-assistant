@@ -91,11 +91,17 @@ func QueryHandler(ml *client.MLClient, logRepo repository.QueryLogRepository) fi
 			_ = logged
 		}()
 
-		// Track failure mode
+		// Track failure mode based on the response rather than assuming every
+		// non-refusal answer is factually correct. Without a wired faithfulness
+		// evaluator we cannot verify factual accuracy, so a non-refusal answer
+		// is "answered", not "correct" — this avoids labeling hallucinations
+		// as correct in metrics.
 		if result.Answer == "Not found in context." {
 			middleware.IncFailureMode("insufficient_ctx")
+		} else if len(result.Sources) > 0 {
+			middleware.IncFailureMode("answered")
 		} else {
-			middleware.IncFailureMode("correct")
+			middleware.IncFailureMode("no_sources")
 		}
 
 		return c.JSON(QueryResponse{

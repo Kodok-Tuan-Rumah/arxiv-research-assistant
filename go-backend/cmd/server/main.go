@@ -2,8 +2,11 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
 	"runtime"
+	"syscall"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -70,16 +73,43 @@ func main() {
 	app.Get("/query/history", api.QueryHistoryHandler(logRepo))
 	app.Get("/metrics", adaptor.HTTPHandler(promhttp.Handler()))
 
+	// Metrics goroutine — stoppable via done channel.
+	done := make(chan struct{})
 	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
 		for {
-			middleware.SetActiveGoroutines(float64(runtime.NumGoroutine()))
-			middleware.SetPostgresConnections(float64(db.Stats().OpenConnections))
-			time.Sleep(10 * time.Second)
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				middleware.SetActiveGoroutines(float64(runtime.NumGoroutine()))
+				middleware.SetPostgresConnections(float64(db.Stats().OpenConnections))
+			}
 		}
 	}()
 
-	log.Println("Server starting on :8080")
-	log.Fatal(app.Listen(":8080"))
+	// Run server in a goroutine so we can listen for OS signals.
+	go func() {
+		log.Println("Server starting on :8080")
+		if err := app.Listen(":8080"); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("server error: %v", err)
+		}
+	}()
+
+	// Wait for interrupt or terminate signal.
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	<-sigChan
+	log.Println("Shutting down server...")
+
+	close(done)
+
+	if err := app.ShutdownWithTimeout(10 * time.Second); err != nil {
+		log.Printf("server shutdown error: %v", err)
+	}
+
+	log.Println("Server stopped")
 }
 
 func getEnv(key, fallback string) string {
