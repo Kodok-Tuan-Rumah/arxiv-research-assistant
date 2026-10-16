@@ -25,7 +25,11 @@ setup:
 	@sleep 8
 	@echo "🗄️  Running migrations..."
 	docker exec -i $$(docker ps --filter "name=postgres" --format "{{.Names}}") \
-		psql -U arxiv -d arxiv_db < go-backend/migrations/003_versioning.up.sql 2>/dev/null || true
+		psql -U arxiv -d arxiv_db < go-backend/migrations/001_base.up.sql
+	docker exec -i $$(docker ps --filter "name=postgres" --format "{{.Names}}") \
+		psql -U arxiv -d arxiv_db < go-backend/migrations/002_query_logs.up.sql
+	docker exec -i $$(docker ps --filter "name=postgres" --format "{{.Names}}") \
+		psql -U arxiv -d arxiv_db < go-backend/migrations/003_versioning.up.sql
 	@echo "🐍 Setting up Python venv..."
 	cd python-ml && python3 -m venv venv && venv/bin/pip install -r requirements.txt -q
 	@echo "🔨 Building Go backend..."
@@ -40,7 +44,11 @@ setup:
 
 migrate:
 	docker exec -i $$(docker ps --filter "name=postgres" --format "{{.Names}}") \
-		psql -U arxiv -d arxiv_db < go-backend/migrations/003_versioning.up.sql 2>/dev/null || true
+		psql -U arxiv -d arxiv_db < go-backend/migrations/001_base.up.sql
+	docker exec -i $$(docker ps --filter "name=postgres" --format "{{.Names}}") \
+		psql -U arxiv -d arxiv_db < go-backend/migrations/002_query_logs.up.sql
+	docker exec -i $$(docker ps --filter "name=postgres" --format "{{.Names}}") \
+		psql -U arxiv -d arxiv_db < go-backend/migrations/003_versioning.up.sql
 
 # ── Tools ──────────────────────────────────────────────────────────────────────
 ingest:
