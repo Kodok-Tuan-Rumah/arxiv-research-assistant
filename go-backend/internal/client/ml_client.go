@@ -2,6 +2,7 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -29,7 +30,7 @@ func NewMLClient(baseURL string) *MLClient {
 			Timeout: 30 * time.Second,
 		},
 		queryClient: &http.Client{
-			Timeout: 600 * time.Second,
+			Timeout: 60 * time.Second,
 		},
 		queryCB:  newCircuitBreaker("ml-query"),
 		embedCB:  newCircuitBreaker("ml-embed"),
@@ -195,7 +196,7 @@ func extractDetail(body []byte) string {
 	return strings.TrimSpace(string(body))
 }
 
-func (c *MLClient) Query(query string, topK int, model string, arxivID string, requestID string) (*QueryMLResponse, error) {
+func (c *MLClient) Query(ctx context.Context, query string, topK int, model string, arxivID string, requestID string) (*QueryMLResponse, error) {
 	body, err := json.Marshal(QueryRequest{
 		Query:   query,
 		TopK:    topK,
@@ -207,7 +208,7 @@ func (c *MLClient) Query(query string, topK int, model string, arxivID string, r
 	}
 
 	result, err := c.queryCB.Execute(func() (interface{}, error) {
-		req, err := http.NewRequest(http.MethodPost, c.baseURL+"/query", bytes.NewBuffer(body))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/query", bytes.NewBuffer(body))
 		if err != nil {
 			return nil, fmt.Errorf("failed to build request: %w", err)
 		}

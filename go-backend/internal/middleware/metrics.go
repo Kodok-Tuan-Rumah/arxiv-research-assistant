@@ -27,13 +27,6 @@ var (
 		[]string{"method", "path"},
 	)
 
-	queryFaithfulness = promauto.NewGauge(
-		prometheus.GaugeOpts{
-			Name: "query_faithfulness_score",
-			Help: "Average faithfulness score of last queries",
-		},
-	)
-
 	activeGoroutines = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "active_goroutines",
@@ -54,13 +47,6 @@ var (
 			Name:    "ollama_generation_duration_seconds",
 			Help:    "Ollama LLM generation duration in seconds",
 			Buckets: []float64{1, 5, 10, 30, 60, 120, 300},
-		},
-	)
-
-	papersIngestedTotal = promauto.NewCounter(
-		prometheus.CounterOpts{
-			Name: "papers_ingested_total",
-			Help: "Total papers successfully ingested",
 		},
 	)
 
@@ -93,10 +79,8 @@ func Metrics() fiber.Handler {
 	}
 }
 
-func SetFaithfulness(score float64)              { queryFaithfulness.Set(score) }
 func SetActiveGoroutines(n float64)              { activeGoroutines.Set(n) }
 func ObserveQdrantSearch(seconds float64)        { qdrantSearchDuration.Observe(seconds) }
 func ObserveOllamaGeneration(seconds float64)    { ollamaGenerationDuration.Observe(seconds) }
-func IncPapersIngested()                         { papersIngestedTotal.Inc() }
 func IncFailureMode(mode string)                 { failureModeTotal.WithLabelValues(mode).Inc() }
 func SetPostgresConnections(n float64)           { postgresConnectionsActive.Set(n) }

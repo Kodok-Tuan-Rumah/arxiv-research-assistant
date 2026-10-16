@@ -56,7 +56,7 @@ func main() {
 		Format: "[${time}] ${status} - ${latency} ${method} ${path} | req-id: ${respHeader:X-Request-ID}\n",
 	}))
 
-	app.Get("/health", api.HealthHandler(db, mlClient))
+	app.Get("/health", api.HealthHandler(db, mlClient, api.NewQdrantClient(getEnv("QDRANT_URL", "http://localhost:6333"))))
 
 	paperRepo := repository.NewPaperRepository(db)
 	papersHandler := api.NewPapersHandler(paperRepo, mlClient)

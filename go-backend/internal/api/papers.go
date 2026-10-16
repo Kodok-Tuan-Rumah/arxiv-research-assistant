@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/gofiber/fiber/v2"
@@ -47,7 +48,10 @@ func (h *PapersHandler) GetByID(c *fiber.Ctx) error {
 
 	paper, err := h.repo.GetByID(c.Context(), id)
 	if err != nil {
-		return fiber.NewError(fiber.StatusNotFound, "paper not found")
+		if errors.Is(err, repository.ErrNotFound) {
+			return fiber.NewError(fiber.StatusNotFound, "paper not found")
+		}
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to fetch paper")
 	}
 
 	return c.JSON(paper)

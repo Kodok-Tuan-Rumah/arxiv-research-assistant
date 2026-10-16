@@ -1,29 +1,110 @@
 package api
 
 import (
+	"context"
+	"net/http"
+	"time"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/jmoiron/sqlx"
 	"github.com/malikimayzar/arxiv-research-assistant/internal/client"
 )
 
+// HealthResponse describes the health of the API and its dependencies.
 type HealthResponse struct {
 	Status   string            `json:"status"`
 	Version  string            `json:"version"`
 	Services map[string]string `json:"services"`
 }
 
-func HealthHandler(db *sqlx.DB, ml *client.MLClient) fiber.Handler {
+// qdrantClient is a small interface so the health check can be unit-tested
+// without a live Qdrant instance.
+type qdrantClient interface {
+	Health(ctx context.Context) error
+}
+
+// QdrantClient checks Qdrant readiness via its /health endpoint.
+type QdrantClient struct {
+	baseURL    string
+	httpClient *http.Client
+}
+
+// NewQdrantClient creates a Qdrant health-check client.
+func NewQdrantClient(baseURL string) *QdrantClient {
+	return &QdrantClient{
+		baseURL:    baseURL,
+		httpClient: &http.Client{Timeout: 5 * time.Second},
+	}
+}
+
+// Health checks Qdrant readiness via its /health endpoint.
+func (q *QdrantClient) Health(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, q.baseURL+"/health", nil)
+	if err != nil {
+		return err
+	}
+	resp, err := q.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return &statusError{code: resp.StatusCode}
+	}
+	return nil
+}
+
+type statusError struct {
+	code int
+}
+
+func (e *statusError) Error() string {
+	return "qdrant returned status " + itoa(e.code)
+}
+
+func itoa(i int) string {
+	// Avoid importing strconv for a single integer.
+	if i == 0 {
+		return "0"
+	}
+	neg := i < 0
+	if neg {
+		i = -i
+	}
+	var buf [20]byte
+	pos := len(buf)
+	for i > 0 {
+		pos--
+		buf[pos] = byte('0' + i%10)
+		i /= 10
+	}
+	if neg {
+		pos--
+		buf[pos] = '-'
+	}
+	return string(buf[pos:])
+}
+
+func HealthHandler(db *sqlx.DB, ml *client.MLClient, qdrant qdrantClient) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		ctx, cancel := context.WithTimeout(c.Context(), 5*time.Second)
+		defer cancel()
+
 		services := map[string]string{
 			"postgres": "ok",
-			"qdrant":   "pending",
+			"qdrant":   "ok",
 			"ml":       "ok",
 		}
 
 		overallStatus := "ok"
 
-		if db == nil || db.Ping() != nil {
+		if db == nil || db.PingContext(ctx) != nil {
 			services["postgres"] = "error"
+			overallStatus = "degraded"
+		}
+
+		if qdrant == nil || qdrant.Health(ctx) != nil {
+			services["qdrant"] = "error"
 			overallStatus = "degraded"
 		}
 

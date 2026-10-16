@@ -48,7 +48,7 @@ func QueryHandler(ml *client.MLClient, logRepo repository.QueryLogRepository) fi
 			req.Model = "phi3:mini"
 		}
 
-		result, err := ml.Query(req.Query, req.TopK, req.Model, req.ArxivID, requestID)
+		result, err := ml.Query(c.Context(), req.Query, req.TopK, req.Model, req.ArxivID, requestID)
 		if err != nil {
 			// Empty retrieval is a valid outcome, not a failure: answer 200 with
 			// insufficient_context so clients can render it without an error box.

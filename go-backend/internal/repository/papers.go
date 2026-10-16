@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -9,6 +11,9 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
 )
+
+// ErrNotFound is returned when a requested paper does not exist.
+var ErrNotFound = errors.New("paper not found")
 
 type Paper struct {
 	ID         uuid.UUID      `json:"id"          db:"id"`
@@ -80,6 +85,9 @@ func (r *paperRepo) GetByID(ctx context.Context, id uuid.UUID) (*Paper, error) {
 		WHERE p.id = $1
 		GROUP BY p.id`, id).StructScan(&p)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
 		return nil, fmt.Errorf("paperRepo.GetByID: %w", err)
 	}
 	return &p, nil

@@ -1,6 +1,7 @@
 package client_test
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -25,7 +26,7 @@ func TestQueryBreakerIgnores4xx(t *testing.T) {
 	ml := client.NewMLClient(srv.URL)
 
 	for i := 0; i < 6; i++ {
-		_, err := ml.Query("q", 5, "m", "", "req")
+		_, err := ml.Query(context.Background(), "q", 5, "m", "", "req")
 		var statusErr *client.StatusError
 		if !errors.As(err, &statusErr) || statusErr.StatusCode != http.StatusNotFound {
 			t.Fatalf("call %d: want StatusError 404, got %v", i+1, err)
@@ -49,7 +50,7 @@ func TestQueryBreakerOpensOn5xx(t *testing.T) {
 	ml := client.NewMLClient(srv.URL)
 
 	for i := 0; i < 5; i++ {
-		if _, err := ml.Query("q", 5, "m", "", "req"); err == nil {
+		if _, err := ml.Query(context.Background(), "q", 5, "m", "", "req"); err == nil {
 			t.Fatalf("call %d: expected error", i+1)
 		}
 	}
@@ -58,7 +59,7 @@ func TestQueryBreakerOpensOn5xx(t *testing.T) {
 		t.Fatalf("breaker must open after 5 consecutive 5xx, got %q", state)
 	}
 
-	_, err := ml.Query("q", 5, "m", "", "req")
+	_, err := ml.Query(context.Background(), "q", 5, "m", "", "req")
 	if err == nil || !strings.Contains(err.Error(), "circuit open") {
 		t.Fatalf("expected circuit-open error after tripping, got %v", err)
 	}
@@ -71,7 +72,7 @@ func TestQueryBreakerOpensOnTransportError(t *testing.T) {
 	ml := client.NewMLClient(srv.URL)
 
 	for i := 0; i < 5; i++ {
-		_, _ = ml.Query("q", 5, "m", "", "req")
+		_, _ = ml.Query(context.Background(), "q", 5, "m", "", "req")
 	}
 
 	if state := ml.CircuitBreakerStates()["query"]; state != "open" {
