@@ -16,6 +16,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - arxiv-net
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -25,6 +27,13 @@ services:
       - "6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - arxiv-net
 
   redis:
     image: redis:7-alpine
@@ -36,6 +45,84 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - arxiv-net
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: arxiv-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - arxiv-net
+
+  python-ml:
+    build:
+      context: ../python-ml
+      dockerfile: Dockerfile
+    container_name: arxiv-python-ml
+    ports:
+      - "8001:8001"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: arxiv
+      DB_PASSWORD: arxiv_secret
+      DB_NAME: arxiv_db
+      QDRANT_URL: http://qdrant:6333
+      OLLAMA_HOST: http://ollama:11434
+      LLM_PROVIDER: ollama
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - arxiv-net
+
+  go-backend:
+    build:
+      context: ../go-backend
+      dockerfile: Dockerfile
+    container_name: arxiv-go-backend
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: arxiv
+      DB_PASSWORD: arxiv_secret
+      DB_NAME: arxiv_db
+      ML_SERVICE_URL: http://python-ml:8001
+      QDRANT_URL: http://qdrant:6333
+      LLM_PROVIDER: ollama
+      GROQ_MODEL: openai/gpt-oss-20b
+    depends_on:
+      postgres:
+        condition: service_healthy
+      python-ml:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - arxiv-net
 
   prometheus:
     image: prom/prometheus:latest
@@ -50,6 +137,8 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.retention.time=7d'
+    networks:
+      - arxiv-net
 
   grafana:
     image: grafana/grafana:latest
@@ -61,9 +150,16 @@ services:
       GF_USERS_ALLOW_SIGN_UP: false
     volumes:
       - grafana_data:/var/lib/grafana
+    networks:
+      - arxiv-net
+
+networks:
+  arxiv-net:
+    driver: bridge
 
 volumes:
   postgres_data:
   qdrant_data:
   prometheus_data:
   grafana_data:
+  ollama_data:
