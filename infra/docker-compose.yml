@@ -116,8 +116,6 @@ services:
       DB_NAME: arxiv_db
       ML_SERVICE_URL: http://python-ml:8001
       QDRANT_URL: http://qdrant:6333
-      LLM_PROVIDER: ollama
-      GROQ_MODEL: openai/gpt-oss-20b
     depends_on:
       postgres:
         condition: service_healthy
