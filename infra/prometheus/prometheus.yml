@@ -3,12 +3,14 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
+  # Mode B (compose arxiv) — scrape lewat DNS arxiv-net.
+  # `host.docker.internal` tidak jalan di Docker rootless (koneksi ditolak).
   - job_name: 'go-backend'
     static_configs:
-      - targets: ['host.docker.internal:8080']
+      - targets: ['go-backend:8080']
     metrics_path: '/metrics'
 
   - job_name: 'python-ml'
     static_configs:
-      - targets: ['host.docker.internal:8001']
+      - targets: ['python-ml:8001']
     metrics_path: '/metrics'
