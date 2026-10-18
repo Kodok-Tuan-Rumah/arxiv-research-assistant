@@ -29,8 +29,9 @@ func NewMLClient(baseURL string) *MLClient {
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
+		// Cold LLM generation (first phi3:mini load on CPU) can exceed 2 minutes.
 		queryClient: &http.Client{
-			Timeout: 60 * time.Second,
+			Timeout: 180 * time.Second,
 		},
 		queryCB:  newCircuitBreaker("ml-query"),
 		embedCB:  newCircuitBreaker("ml-embed"),

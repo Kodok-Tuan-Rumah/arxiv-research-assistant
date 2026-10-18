@@ -1,11 +1,18 @@
-fastapi==0.115.0
-uvicorn==0.30.6
-sentence-transformers==3.0.1
-qdrant-client==1.11.0
-psycopg2-binary==2.9.9
-redis==5.0.8
-python-dotenv==1.0.1
-httpx==0.27.2
+fastapi
+uvicorn
+sentence-transformers
+qdrant-client
+psycopg2-binary
+redis
+python-dotenv
+httpx
 prometheus-fastapi-instrumentator
 psycopg2-binary
 groq
+# sentence-transformers dependencies
+transformers
+huggingface_hub
+scikit-learn
+scipy
+tokenizers
+numpy

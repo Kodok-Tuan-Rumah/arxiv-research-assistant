@@ -1,4 +1,5 @@
 import logging
+import os
 import uuid
 
 from qdrant_client import QdrantClient
@@ -9,8 +10,16 @@ logger = logging.getLogger(__name__)
 COLLECTION_NAME = "arxiv_chunks"
 VECTOR_SIZE = 384
 
-def get_client(host: str = "localhost", port: int = 6333) -> QdrantClient:
-    return QdrantClient(host=host, port=port)
+def get_client(host: str | None = None, port: int | None = None) -> QdrantClient:
+    """Create a Qdrant client.
+
+    Prefers QDRANT_URL (set by docker-compose) so the client targets the
+    shared qdrant container; falls back to host/port for local runs.
+    """
+    url = os.getenv("QDRANT_URL")
+    if url:
+        return QdrantClient(url=url)
+    return QdrantClient(host=host or "localhost", port=port or 6333)
 
 def ensure_collection(client: QdrantClient):
     collections = [c.name for c in client.get_collections().collections]

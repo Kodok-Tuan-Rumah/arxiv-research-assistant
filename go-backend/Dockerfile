@@ -23,6 +23,7 @@ ENV DB_HOST=postgres \
     QDRANT_URL=http://qdrant:6333 \
     LLM_PROVIDER=ollama \
     GROQ_MODEL=openai/gpt-oss-20b
-HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=3 \
-  CMD wget -qO- http://localhost:8080/health || exit 1
+# wget localhost resolves to ::1 while Fiber binds 0.0.0.0 (IPv4) — probe the IPv4 loopback explicitly.
+HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:8080/health || exit 1
 CMD ["/bin/server"]

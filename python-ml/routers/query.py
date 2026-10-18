@@ -63,7 +63,7 @@ def query(payload: QueryRequest, request: Request):
 
     try:
         if provider == "groq":
-            model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+            model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
             generation = groq_client.generate(payload.query, context_chunks, model)
         else:
             generation = ollama_client.generate(payload.query, context_chunks, payload.model)

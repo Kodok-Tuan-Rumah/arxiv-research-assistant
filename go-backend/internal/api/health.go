@@ -23,7 +23,7 @@ type qdrantClient interface {
 	Health(ctx context.Context) error
 }
 
-// QdrantClient checks Qdrant readiness via its /health endpoint.
+// QdrantClient checks Qdrant readiness via its /healthz endpoint.
 type QdrantClient struct {
 	baseURL    string
 	httpClient *http.Client
@@ -37,9 +37,9 @@ func NewQdrantClient(baseURL string) *QdrantClient {
 	}
 }
 
-// Health checks Qdrant readiness via its /health endpoint.
+// Health checks Qdrant readiness via its /healthz endpoint.
 func (q *QdrantClient) Health(ctx context.Context) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, q.baseURL+"/health", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, q.baseURL+"/healthz", nil)
 	if err != nil {
 		return err
 	}

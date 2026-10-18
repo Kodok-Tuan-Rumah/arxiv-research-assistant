@@ -28,7 +28,8 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      # image qdrant tidak punya curl — probe port via bash /dev/tcp (konsisten root compose)
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/6333'"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -52,11 +53,13 @@ services:
     image: ollama/ollama:latest
     container_name: arxiv-ollama
     ports:
-      - "11434:11434"
+      # 11434 di host dipakai daemon Ollama host — petakan ke 11435 (konsisten root compose)
+      - "11435:11434"
     volumes:
       - ollama_data:/root/.ollama
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      # image ollama tidak punya curl — probe port via bash /dev/tcp
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/11434'"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -79,6 +82,9 @@ services:
       QDRANT_URL: http://qdrant:6333
       OLLAMA_HOST: http://ollama:11434
       LLM_PROVIDER: ollama
+      # Groq tersedia bila LLM_PROVIDER diganti "groq" (konsisten root compose)
+      GROQ_MODEL: openai/gpt-oss-20b
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -87,7 +93,8 @@ services:
       ollama:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      # image python:slim tidak punya curl — probe dengan urllib
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=5)"]
       interval: 10s
       timeout: 5s
       retries: 10
