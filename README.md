@@ -1,5 +1,6 @@
 # ArXiv Research Assistant
 
+> Project boundaries and goals: [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md) and [`PROJECT_GOALS.md`](PROJECT_GOALS.md).
 > RAG system for querying academic papers — Go backend, Python ML service, and a Prometheus/Grafana observability stack.
 
 ![CI](https://github.com/malikimayzar/arxiv-research-assistant/actions/workflows/test.yml/badge.svg)
