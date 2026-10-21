@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -72,15 +73,19 @@ func Metrics() fiber.Handler {
 		err := c.Next()
 		duration := time.Since(start).Seconds()
 		status := strconv.Itoa(c.Response().StatusCode())
-		path := c.Route().Path
-		httpRequestsTotal.WithLabelValues(c.Method(), path, status).Inc()
-		httpRequestDuration.WithLabelValues(c.Method(), path).Observe(duration)
+		// Fiber returns strings backed by the request buffer. Prometheus keeps
+		// label values beyond the request lifetime, so cloning prevents a later
+		// request from mutating an earlier label (for example POST -> GETT).
+		method := strings.Clone(c.Method())
+		path := strings.Clone(c.Route().Path)
+		httpRequestsTotal.WithLabelValues(method, path, status).Inc()
+		httpRequestDuration.WithLabelValues(method, path).Observe(duration)
 		return err
 	}
 }
 
-func SetActiveGoroutines(n float64)              { activeGoroutines.Set(n) }
-func ObserveQdrantSearch(seconds float64)        { qdrantSearchDuration.Observe(seconds) }
-func ObserveOllamaGeneration(seconds float64)    { ollamaGenerationDuration.Observe(seconds) }
-func IncFailureMode(mode string)                 { failureModeTotal.WithLabelValues(mode).Inc() }
-func SetPostgresConnections(n float64)           { postgresConnectionsActive.Set(n) }
+func SetActiveGoroutines(n float64)           { activeGoroutines.Set(n) }
+func ObserveQdrantSearch(seconds float64)     { qdrantSearchDuration.Observe(seconds) }
+func ObserveOllamaGeneration(seconds float64) { ollamaGenerationDuration.Observe(seconds) }
+func IncFailureMode(mode string)              { failureModeTotal.WithLabelValues(mode).Inc() }
+func SetPostgresConnections(n float64)        { postgresConnectionsActive.Set(n) }
