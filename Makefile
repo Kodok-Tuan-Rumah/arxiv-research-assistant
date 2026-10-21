@@ -66,6 +66,9 @@ ablation:
 test:
 	cd go-backend && go test ./... -v
 
+test-ml:
+	cd python-ml && PYTHONPATH=. pytest tests/ -v
+
 lint:
 	cd go-backend && go vet ./...
 

@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 QUERIES=(
   "What is RAG?"
   "What are the limitations of naive RAG?"

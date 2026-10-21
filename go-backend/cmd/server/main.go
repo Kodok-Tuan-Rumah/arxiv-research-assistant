@@ -66,7 +66,6 @@ func main() {
 	app.Get("/papers", papersHandler.List)
 	app.Get("/papers/:id", papersHandler.GetByID)
 	app.Delete("/papers/:id", papersHandler.Delete)
-	// query log repo
 	logRepo := repository.NewQueryLogRepository(db)
 
 	app.Post("/query", api.QueryHandler(mlClient, logRepo))
