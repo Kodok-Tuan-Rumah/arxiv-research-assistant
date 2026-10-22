@@ -2,8 +2,8 @@
 > **Repo:** `arxiv-research-assistant`  
 > **Role:** ArXiv Academic Ingestion & Paper-Scoped Retrieval Service  
 > **Architecture:** Two-Tier Service (Go Fiber `:8080` + Python FastAPI `:8001`)  
-> **Status:** Active / Production-Hardened  
-> **Last Updated:** 2026-10-19  
+> **Status:** Core ingestion/query paths have hardening and unit-test coverage; production readiness has not been established.
+> **Last Updated:** 2026-10-22
 
 ---
 
@@ -179,18 +179,21 @@ Untuk mencegah bentrok port dan inkonsistensi kredensial, aturan operasional ber
 
 ## 7. Roadmap Peningkatan Layanan (Phase-Gated Roadmap)
 
-### 🟢 Fase 1 — Standardisasi Pengujian & Lingkungan (Segera)
+### 🟢 Fase 1 — Standardisasi Pengujian & Lingkungan
 * [x] Verifikasi 100% kelulusan Go test di `go-backend` (`health_test`, `papers_test`, `query_test`, `ml_client_test`, `request_id_test`).
 * [x] Verifikasi 100% kelulusan 19 unit test di `python-ml/tests` (`test_chunker`, `test_ingest_compensation`, `test_qdrant_ids`, `test_query_embed_guard`, `test_validators`).
-* [ ] Menambahkan target `test-python-ml` secara eksplisit pada root `Makefile` dengan konfigurasi `PYTHONPATH=arxiv-research-assistant/python-ml`.
+* [x] Menambahkan target `test-arxiv-ml` ke agregat root `make test` dengan `PYTHONPATH=.` dari direktori service.
 
-### 🟡 Fase 2 — Refaktorisasi Evaluasi (Harmonisasi Ekosistem)
-* [ ] Menghentikan penggunaan prompt *LLM-as-judge* lama pada [`python-ml/engine/evaluation/faithfulness.py`](python-ml/engine/evaluation/faithfulness.py).
-* [ ] Mengalihkan rute evaluasi kesetiaan paper secara langsung ke `llm-eval-framework` (`:8002`) untuk memperoleh metrik klaim tanpa bias model lokal.
+### 🟡 Fase 2 — Kejelasan dan kepemilikan evaluasi
+* [ ] Putuskan apakah endpoint `/evaluate` internal yang memakai `phi3:mini` tetap menjadi fitur eksperimen atau dipensiunkan. Jangan menyebut skornya sebagai evaluasi independen atau deterministik.
+* [ ] Bila evaluasi paper melalui `llm-eval-framework` masih dibutuhkan, tetapkan satu pemilik alur dan kontrak. Hindari dua evaluator online yang hasilnya tampak sebanding padahal metodenya berbeda.
+* [ ] Catat hasil uji integrasi evaluator dan statusnya; target ini belum dianggap selesai hanya karena gateway memiliki evaluator.
 
-### 🔵 Fase 3 — Optimasi Caching & Skalabilitas Retrieval
-* [ ] Mengaktifkan kontainer Redis (`ws-redis`) untuk menyimpan cache hasil embedding query yang berulang.
-* [ ] Menambahkan dukungan pembacaan multi-paper query (*cross-paper synthesis*).
+### 🔵 Fase 3 — Peningkatan yang perlu keputusan produk
+* [ ] Evaluasi manfaat cache ArXiv. Redis workspace saat ini opsional dan cache yang terdokumentasi dimiliki RAG; jangan aktifkan Redis di ArXiv tanpa pemilik, invalidasi, dan metrik hit/miss yang jelas.
+* [ ] Tinjau kebutuhan cross-paper synthesis sebagai fitur terpisah. Tetapkan provenance multi-paper dan evaluasi sebelum implementasi.
+
+> Checklist ini adalah roadmap pengembangan, bukan deklarasi kesiapan produksi. Runtime readiness, keamanan deployment, dan acceptance kualitas harus dinilai lewat gate workspace.
 
 ---
 
