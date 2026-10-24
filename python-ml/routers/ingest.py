@@ -72,6 +72,8 @@ def ingest(request: IngestRequest):
 
                 # Chunk
                 chunks = chunk_text(text, request.chunk_size, request.overlap)
+                if not chunks:
+                    raise ValueError("no_chunks_extracted")
 
                 # Embed
                 embeddings = app_state.model.encode(chunks).tolist()
