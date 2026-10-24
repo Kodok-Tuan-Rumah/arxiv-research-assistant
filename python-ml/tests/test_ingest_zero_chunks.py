@@ -55,9 +55,6 @@ class Harness:
     def insert_chunks(self, conn, paper_id, chunks, ids):
         self.calls.append("insert_chunks")
 
-    def delete_paper(self, conn, paper_id):
-        self.calls.append("delete_paper")
-
     def fetch_metadata(self, arxiv_ids):
         self.calls.append("fetch_metadata")
         return [
@@ -85,8 +82,16 @@ class Harness:
     def ensure_collection(self, client):
         self.calls.append("ensure_collection")
 
-    def delete_by_arxiv_id(self, client, arxiv_id):
-        self.calls.append("qdrant_delete")
+    def snapshot_by_arxiv_id(self, client, arxiv_id):
+        self.calls.append("qdrant_snapshot")
+        return [{"id": "old-point-1", "vector": [0.0], "payload": {"arxiv_id": arxiv_id}}]
+
+    def restore_snapshot(self, client, arxiv_id, snapshot):
+        self.calls.append("qdrant_restore")
+
+    def delete_stale_chunks(self, client, arxiv_id, keep_ids):
+        self.calls.append("qdrant_delete_stale")
+        return 0
 
     def upsert_chunks(self, client, chunks, ids=None):
         self.calls.append("qdrant_upsert")
@@ -97,13 +102,14 @@ class Harness:
         monkeypatch.setattr(ingest_mod, "get_connection", self.get_connection)
         monkeypatch.setattr(ingest_mod, "upsert_paper", self.upsert_paper)
         monkeypatch.setattr(ingest_mod, "insert_chunks", self.insert_chunks)
-        monkeypatch.setattr(ingest_mod, "delete_paper", self.delete_paper)
         monkeypatch.setattr(ingest_mod, "fetch_metadata", self.fetch_metadata)
         monkeypatch.setattr(ingest_mod, "download_and_parse_pdf", self.download_and_parse_pdf)
         monkeypatch.setattr(ingest_mod, "chunk_text", self.chunk_text)
         monkeypatch.setattr(ingest_mod, "get_client", self.get_client)
         monkeypatch.setattr(ingest_mod, "ensure_collection", self.ensure_collection)
-        monkeypatch.setattr(ingest_mod, "delete_by_arxiv_id", self.delete_by_arxiv_id)
+        monkeypatch.setattr(ingest_mod, "snapshot_by_arxiv_id", self.snapshot_by_arxiv_id)
+        monkeypatch.setattr(ingest_mod, "restore_snapshot", self.restore_snapshot)
+        monkeypatch.setattr(ingest_mod, "delete_stale_chunks", self.delete_stale_chunks)
         monkeypatch.setattr(ingest_mod, "upsert_chunks", self.upsert_chunks)
 
 
@@ -121,7 +127,9 @@ def test_empty_pdf_is_rejected_before_pg_or_qdrant(monkeypatch):
     assert "upsert_paper" not in h.calls
     assert "insert_chunks" not in h.calls
     assert "pg_commit" not in h.calls
-    assert "qdrant_delete" not in h.calls
+    assert "qdrant_snapshot" not in h.calls
+    assert "qdrant_restore" not in h.calls
+    assert "qdrant_delete_stale" not in h.calls
     assert "qdrant_upsert" not in h.calls
 
 

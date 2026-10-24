@@ -5,15 +5,17 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 import state as app_state
 from engine.arxiv_id import normalize_arxiv_id
-from engine.db import delete_paper, get_connection, insert_chunks, upsert_paper
+from engine.db import get_connection, insert_chunks, upsert_paper
 from engine.ingestion.arxiv_fetcher import fetch_metadata
 from engine.ingestion.chunker import chunk_text
 from engine.ingestion.pdf_parser import download_and_parse_pdf
 from engine.retrieval.qdrant_client import (
     compute_point_ids,
-    delete_by_arxiv_id,
+    delete_stale_chunks,
     ensure_collection,
     get_client,
+    restore_snapshot,
+    snapshot_by_arxiv_id,
     upsert_chunks,
 )
 
@@ -65,7 +67,7 @@ def ingest(request: IngestRequest):
     try:
         for paper in papers:
             paper_id = None
-            pg_committed = False
+            snapshot = None
             try:
                 # Parse PDF
                 text = download_and_parse_pdf(paper.pdf_url)
@@ -91,36 +93,44 @@ def ingest(request: IngestRequest):
                     for i, chunk in enumerate(chunks)
                 ]
 
-                # Order matters: commit PostgreSQL first (source of truth), then
-                # write Qdrant vectors. If the vector write fails afterwards, the
-                # PG rows are removed below (compensation); the reverse order
-                # would leave vectors without a paper behind on any later error.
+                # Non-destructive order (A4): snapshot the old vectors, write the
+                # new vectors, commit PG (source of truth), then sweep stale
+                # vectors. Old vectors are never deleted before the new ones are
+                # safely on disk. Residual risk (documented P2): a crash between
+                # upsert and commit can leave new vectors without PG rows;
+                # re-ingesting the same paper repairs it.
+                snapshot = snapshot_by_arxiv_id(qdrant, paper.arxiv_id)
+                upsert_chunks(qdrant, chunk_dicts, ids=qdrant_ids)
+
                 paper_id = upsert_paper(conn, paper)
                 insert_chunks(conn, paper_id, chunks, qdrant_ids)
                 conn.commit()
-                pg_committed = True
 
-                # Purge stale points, then upsert with the same precomputed ids
-                delete_by_arxiv_id(qdrant, paper.arxiv_id)
-                upsert_chunks(qdrant, chunk_dicts, ids=qdrant_ids)
+                try:
+                    delete_stale_chunks(qdrant, paper.arxiv_id, qdrant_ids)
+                except Exception as stale_exc:  # noqa: BLE001 — sweep is best effort
+                    logger.warning(
+                        f"⚠️ {paper.arxiv_id}: stale vector sweep failed "
+                        f"(unchanged, reconciliation will handle it): {stale_exc}"
+                    )
 
                 ingested.append(paper.arxiv_id)
                 total_chunks += len(chunks)
                 logger.info(f"✅ Ingested {paper.arxiv_id}: {len(chunks)} chunks")
 
             except Exception as e:  # noqa: BLE001 — keep ingesting the remaining papers
-                if pg_committed:
-                    # Qdrant failed after the PG commit → remove the PG rows
-                    try:
-                        delete_paper(conn, paper_id)
-                        conn.commit()
-                        logger.error(f"❌ {paper.arxiv_id}: vector write failed, PG rows compensated: {e}")
-                    except Exception as ce:  # noqa: BLE001 — compensation is best effort
-                        conn.rollback()
-                        logger.error(f"❌ {paper.arxiv_id}: compensation failed: {ce}")
-                else:
+                try:
                     conn.rollback()
+                    if snapshot is not None:
+                        # Vectors were upserted before this failure; put the old
+                        # vectors back so a failed ingest leaves no orphan mix.
+                        restore_snapshot(qdrant, paper.arxiv_id, snapshot)
                     logger.error(f"❌ Failed to ingest {paper.arxiv_id}: {e}")
+                except Exception as ce:  # noqa: BLE001 — compensation is best effort
+                    logger.error(
+                        f"❌ {paper.arxiv_id}: rollback/restore path failed: "
+                        f"orig={e!r}, compensation={ce}"
+                    )
                 failed.append(paper.arxiv_id)
     finally:
         conn.close()

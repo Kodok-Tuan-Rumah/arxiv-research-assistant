@@ -85,6 +85,68 @@ def delete_by_arxiv_id(client: QdrantClient, arxiv_id: str) -> None:
     )
     logger.info(f"Deleted stale vectors for {arxiv_id}")
 
+
+def snapshot_by_arxiv_id(client: QdrantClient, arxiv_id: str) -> list[dict]:
+    """Return every point of a paper as {id, vector, payload} (A4 compensation)."""
+    from qdrant_client.models import FieldCondition, Filter, MatchValue
+
+    arxiv_id = normalize_arxiv_id(arxiv_id)
+    must = Filter(must=[FieldCondition(key="arxiv_id", match=MatchValue(value=arxiv_id))])
+
+    collected: list = []
+    offset = None
+    while True:
+        batch, offset = client.scroll(
+            collection_name=COLLECTION_NAME,
+            scroll_filter=must,
+            limit=256,
+            offset=offset,
+            with_vectors=True,
+            with_payload=True,
+        )
+        collected.extend(batch)
+        if offset is None:
+            break
+
+    snapshot = [
+        {"id": point.id, "vector": point.vector, "payload": dict(point.payload or {})}
+        for point in collected
+    ]
+    logger.info(f"Snapshotted {len(snapshot)} vector(s) for {arxiv_id}")
+    return snapshot
+
+
+def restore_snapshot(client: QdrantClient, arxiv_id: str, snapshot: list[dict]) -> None:
+    """Drop the paper's current points, then re-create them from the snapshot."""
+    from qdrant_client.models import PointStruct
+
+    arxiv_id = normalize_arxiv_id(arxiv_id)
+    delete_by_arxiv_id(client, arxiv_id)
+    if snapshot:
+        points = [
+            PointStruct(id=point["id"], vector=point["vector"], payload=point.get("payload") or {})
+            for point in snapshot
+        ]
+        client.upsert(collection_name=COLLECTION_NAME, points=points)
+    logger.info(f"Restored snapshot for {arxiv_id}: {len(snapshot)} vector(s)")
+
+
+def delete_stale_chunks(client: QdrantClient, arxiv_id: str, keep_ids: list[str]) -> int:
+    """Delete points of the paper whose id is not in keep_ids. Returns how many."""
+    from qdrant_client.models import PointIdsList
+
+    arxiv_id = normalize_arxiv_id(arxiv_id)
+    keep = set(keep_ids)
+    stale = [point for point in snapshot_by_arxiv_id(client, arxiv_id) if point["id"] not in keep]
+    if stale:
+        client.delete(
+            collection_name=COLLECTION_NAME,
+            points_selector=PointIdsList(points=[point["id"] for point in stale]),
+        )
+        logger.info(f"Deleted {len(stale)} stale vector(s) for {arxiv_id}")
+    return len(stale)
+
+
 def search(client: QdrantClient, query_vector: list[float], top_k: int = 5, arxiv_id: str | None = None):
     from qdrant_client.models import FieldCondition, Filter, MatchValue
 
