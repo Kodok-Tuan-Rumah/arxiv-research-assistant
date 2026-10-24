@@ -4,6 +4,8 @@ import os
 import psycopg2
 import psycopg2.extras
 
+from engine.arxiv_id import normalize_arxiv_id
+
 logger = logging.getLogger(__name__)
 
 def get_connection():
@@ -17,6 +19,7 @@ def get_connection():
 
 def upsert_paper(conn, paper) -> str:
     """Insert paper, return paper UUID. Skip if arxiv_id already exists."""
+    arxiv_id = normalize_arxiv_id(paper.arxiv_id)
     with conn.cursor() as cur:
         cur.execute("""
             INSERT INTO papers (arxiv_id, title, authors, abstract, categories, published)
@@ -29,7 +32,7 @@ def upsert_paper(conn, paper) -> str:
                 published = EXCLUDED.published
             RETURNING id
         """, (
-            paper.arxiv_id,
+            arxiv_id,
             paper.title,
             paper.authors,
             paper.abstract,

@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 from qdrant_client.models import FilterSelector
 
@@ -5,6 +7,7 @@ from engine.retrieval.qdrant_client import (
     COLLECTION_NAME,
     compute_point_ids,
     delete_by_arxiv_id,
+    search,
     upsert_chunks,
 )
 
@@ -13,12 +16,17 @@ class FakeQdrant:
     def __init__(self):
         self.upserts = []
         self.deletes = []
+        self.searches = []
 
     def upsert(self, collection_name, points):
         self.upserts.append((collection_name, points))
 
     def delete(self, collection_name, points_selector):
         self.deletes.append((collection_name, points_selector))
+
+    def query_points(self, collection_name, query, limit, query_filter):
+        self.searches.append((collection_name, query, limit, query_filter))
+        return SimpleNamespace(points=[])
 
 
 def _chunks(count, arxiv_id="2312.10997"):
@@ -82,3 +90,27 @@ def test_delete_by_arxiv_id_targets_payload_filter():
     condition = selector.filter.must[0]
     assert condition.key == "arxiv_id"
     assert condition.match.value == "2312.10997"
+
+
+def test_delete_normalizes_versioned_id():
+    client = FakeQdrant()
+
+    delete_by_arxiv_id(client, "2312.10997v3")
+
+    condition = client.deletes[0][1].filter.must[0]
+    assert condition.match.value == "2312.10997"
+
+
+def test_search_filter_normalizes_versioned_id():
+    client = FakeQdrant()
+
+    search(client, [0.0, 1.0], top_k=3, arxiv_id="2312.10997v2")
+
+    _, _, _, query_filter = client.searches[0]
+    condition = query_filter.must[0]
+    assert condition.key == "arxiv_id"
+    assert condition.match.value == "2312.10997"
+
+
+def test_compute_point_ids_are_same_for_versioned_and_unversioned():
+    assert compute_point_ids("2312.10997v4", 3) == compute_point_ids("2312.10997", 3)

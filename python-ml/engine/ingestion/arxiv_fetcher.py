@@ -4,6 +4,8 @@ from datetime import date
 
 import arxiv
 
+from engine.arxiv_id import normalize_arxiv_id
+
 logger = logging.getLogger(__name__)
 
 @dataclass
@@ -22,7 +24,7 @@ def fetch_metadata(arxiv_ids: list[str]) -> list[PaperMetadata]:
     
     papers = []
     for result in client.results(search):
-        arxiv_id = result.entry_id.split("/")[-1]
+        arxiv_id = normalize_arxiv_id(result.entry_id.split("/")[-1])
         papers.append(PaperMetadata(
             arxiv_id=arxiv_id,
             title=result.title,

@@ -2,7 +2,7 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from routers.ingest import router
+from routers.ingest import IngestRequest, router
 
 app = FastAPI()
 app.include_router(router)
@@ -28,6 +28,12 @@ def test_overlap_not_less_than_chunk_size_returns_422():
     )
 
     assert resp.status_code == 422
+
+
+def test_versioned_and_unversioned_ids_dedupe():
+    request = IngestRequest(arxiv_ids=["2312.10997v1", "2312.10997"])
+
+    assert request.arxiv_ids == ["2312.10997"]
 
 
 def test_valid_payload_passes_validation():

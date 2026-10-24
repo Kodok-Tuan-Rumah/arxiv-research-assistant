@@ -5,6 +5,8 @@ import uuid
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
+from engine.arxiv_id import normalize_arxiv_id
+
 logger = logging.getLogger(__name__)
 
 COLLECTION_NAME = "arxiv_chunks"
@@ -34,6 +36,7 @@ def ensure_collection(client: QdrantClient):
 
 def compute_point_ids(arxiv_id: str, count: int) -> list[str]:
     """Deterministic point ids: same paper + position always yields the same id."""
+    arxiv_id = normalize_arxiv_id(arxiv_id)
     return [
         str(uuid.uuid5(uuid.NAMESPACE_URL, f"{arxiv_id}:{i}"))
         for i in range(count)
@@ -71,6 +74,7 @@ def delete_by_arxiv_id(client: QdrantClient, arxiv_id: str) -> None:
     """Remove all stored vectors of a paper (called before re-ingest to avoid duplicates)."""
     from qdrant_client.models import FieldCondition, Filter, FilterSelector, MatchValue
 
+    arxiv_id = normalize_arxiv_id(arxiv_id)
     client.delete(
         collection_name=COLLECTION_NAME,
         points_selector=FilterSelector(
@@ -86,6 +90,7 @@ def search(client: QdrantClient, query_vector: list[float], top_k: int = 5, arxi
 
     query_filter = None
     if arxiv_id:
+        arxiv_id = normalize_arxiv_id(arxiv_id)
         query_filter = Filter(
             must=[FieldCondition(key="arxiv_id", match=MatchValue(value=arxiv_id))]
         )
