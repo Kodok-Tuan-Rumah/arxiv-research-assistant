@@ -9,6 +9,7 @@ httpx
 prometheus-fastapi-instrumentator
 psycopg2-binary
 groq
+
 # sentence-transformers dependencies
 transformers
 huggingface_hub

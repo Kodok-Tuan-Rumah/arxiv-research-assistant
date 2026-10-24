@@ -11,10 +11,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// TestMetricsDoesNotRetainMutableFiberStrings guards against a regression where
-// Prometheus label values aliased Fiber's request buffer. Once the context was
-// reused, a previous method label could change from "POST" to "GETT", causing
-// duplicate series and a 500 from /metrics.
 func TestMetricsDoesNotRetainMutableFiberStrings(t *testing.T) {
 	app := fiber.New()
 	app.Use(Metrics())
