@@ -83,6 +83,7 @@ func QueryHandler(ml *client.MLClient, logRepo repository.QueryLogRepository) fi
 				RetrievalMs:  result.RetrievalMs,
 				GenerationMs: result.GenerationMs,
 				Model:        result.Model,
+				RequestID:    requestID,
 			})
 			if err != nil {
 				fmt.Printf("⚠️  query log failed: %v\n", err)

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/malikimayzar/arxiv-research-assistant/internal/api"
@@ -15,13 +16,23 @@ import (
 	"github.com/malikimayzar/arxiv-research-assistant/internal/repository"
 )
 
-type fakeLogRepo struct{}
+type fakeLogRepo struct {
+	// created receives every CreateQueryLogParams the handler writes. The
+	// handler logs asynchronously, so a channel keeps the test race-free.
+	created chan repository.CreateQueryLogParams
+}
 
-func (fakeLogRepo) Create(_ context.Context, _ repository.CreateQueryLogParams) (*repository.QueryLog, error) {
+func (r *fakeLogRepo) Create(_ context.Context, p repository.CreateQueryLogParams) (*repository.QueryLog, error) {
+	if r.created != nil {
+		select {
+		case r.created <- p:
+		default:
+		}
+	}
 	return &repository.QueryLog{}, nil
 }
 
-func (fakeLogRepo) List(_ context.Context, _ int) ([]repository.QueryLog, error) {
+func (r *fakeLogRepo) List(_ context.Context, _ int) ([]repository.QueryLog, error) {
 	return []repository.QueryLog{}, nil
 }
 
@@ -47,7 +58,7 @@ func TestQueryHandler_MLFailureIsGenericAndRequestIDForwarded(t *testing.T) {
 
 	app := fiber.New(fiber.Config{ErrorHandler: api.ErrorHandler})
 	app.Use(fixedRequestIDMiddleware())
-	app.Post("/query", api.QueryHandler(ml, fakeLogRepo{}))
+	app.Post("/query", api.QueryHandler(ml, &fakeLogRepo{}))
 
 	req := httptest.NewRequest("POST", "/query", strings.NewReader(`{"query":"hello"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -99,7 +110,7 @@ func TestQueryHandler_SuccessForwardsRequestID(t *testing.T) {
 
 	app := fiber.New(fiber.Config{ErrorHandler: api.ErrorHandler})
 	app.Use(fixedRequestIDMiddleware())
-	app.Post("/query", api.QueryHandler(ml, fakeLogRepo{}))
+	app.Post("/query", api.QueryHandler(ml, &fakeLogRepo{}))
 
 	req := httptest.NewRequest("POST", "/query", strings.NewReader(`{"query":"hello"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -139,7 +150,7 @@ func TestQueryHandler_NoChunksReturns200WithFlag(t *testing.T) {
 
 	app := fiber.New(fiber.Config{ErrorHandler: api.ErrorHandler})
 	app.Use(fixedRequestIDMiddleware())
-	app.Post("/query", api.QueryHandler(ml, fakeLogRepo{}))
+	app.Post("/query", api.QueryHandler(ml, &fakeLogRepo{}))
 
 	req := httptest.NewRequest("POST", "/query", strings.NewReader(`{"query":"hello"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -167,5 +178,43 @@ func TestQueryHandler_NoChunksReturns200WithFlag(t *testing.T) {
 	}
 	if len(qResp.Sources) != 0 {
 		t.Errorf("expected no sources, got %d", len(qResp.Sources))
+	}
+}
+
+// The gateway joins its audit row to the backend row by request id. If the
+// handler drops the id before writing query_logs, the two tables can never be
+// correlated and the smoke check has to fall back to matching query text.
+func TestQueryHandler_SuccessPersistsRequestID(t *testing.T) {
+	mlSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"answer":"ok","sources":[],"retrieval_ms":1,"generation_ms":2,"model":"test-model"}`))
+	}))
+	defer mlSrv.Close()
+
+	repo := &fakeLogRepo{created: make(chan repository.CreateQueryLogParams, 1)}
+
+	app := fiber.New(fiber.Config{ErrorHandler: api.ErrorHandler})
+	app.Use(fixedRequestIDMiddleware())
+	app.Post("/query", api.QueryHandler(client.NewMLClient(mlSrv.URL), repo))
+
+	req := httptest.NewRequest("POST", "/query", strings.NewReader(`{"query":"hello"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	select {
+	case p := <-repo.created:
+		if p.RequestID != testRequestID {
+			t.Errorf("persisted request_id = %q, want %q", p.RequestID, testRequestID)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("query log was not written")
 	}
 }

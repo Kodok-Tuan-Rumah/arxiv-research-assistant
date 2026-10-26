@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS query_logs (
   retrieval_strategy VARCHAR(50),
   chunk_size_used    INT,
   session_id         VARCHAR(100),
+  request_id         TEXT,
   created_at         TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -44,6 +45,7 @@ CREATE TABLE IF NOT EXISTS query_logs (
 CREATE INDEX IF NOT EXISTS idx_papers_arxiv_id ON papers(arxiv_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_paper_id ON chunks(paper_id);
 CREATE INDEX IF NOT EXISTS idx_query_logs_created_at ON query_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_query_logs_request_id ON query_logs(request_id);
 CREATE INDEX IF NOT EXISTS idx_query_logs_failure_mode ON query_logs(failure_mode);
 
 -- Prompt versions table

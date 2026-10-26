@@ -18,6 +18,7 @@ type QueryLog struct {
 	Faithfulness *float64  `json:"faithfulness,omitempty" db:"faithfulness"`
 	FailureMode  *string   `json:"failure_mode,omitempty" db:"failure_mode"`
 	Model        string    `json:"model"          db:"model"`
+	RequestID    *string   `json:"request_id,omitempty" db:"request_id"`
 	CreatedAt    time.Time `json:"created_at"     db:"created_at"`
 }
 
@@ -29,6 +30,9 @@ type CreateQueryLogParams struct {
 	Faithfulness *float64
 	FailureMode  *string
 	Model        string
+	// RequestID is the X-Request-ID propagated by the gateway. It is the only
+	// join key between gateway_query_logs and query_logs.
+	RequestID string
 }
 
 type QueryLogRepository interface {
@@ -55,14 +59,20 @@ func (r *queryLogRepo) Create(ctx context.Context, params CreateQueryLogParams) 
 		FailureMode:  params.FailureMode,
 		Model:        params.Model,
 	}
+	// Store NULL rather than "" when no id was propagated, so a missing
+	// correlation is visible in queries instead of looking like a real id.
+	if params.RequestID != "" {
+		requestID := params.RequestID
+		l.RequestID = &requestID
+	}
 
 	err := r.db.QueryRowxContext(ctx, `
-		INSERT INTO query_logs (id, query, answer, retrieval_ms, generation_ms, faithfulness, failure_mode, model)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO query_logs (id, query, answer, retrieval_ms, generation_ms, faithfulness, failure_mode, model, request_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING created_at`,
 		l.ID, l.Query, l.Answer,
 		l.RetrievalMs, l.GenerationMs,
-		l.Faithfulness, l.FailureMode, l.Model,
+		l.Faithfulness, l.FailureMode, l.Model, l.RequestID,
 	).Scan(&l.CreatedAt)
 
 	if err != nil {
@@ -80,7 +90,7 @@ func (r *queryLogRepo) List(ctx context.Context, limit int) ([]QueryLog, error) 
 	var logs []QueryLog
 	err := r.db.SelectContext(ctx, &logs, `
 		SELECT id, query, answer, retrieval_ms, generation_ms,
-		       faithfulness, failure_mode, model, created_at
+		       faithfulness, failure_mode, model, request_id, created_at
 		FROM query_logs
 		ORDER BY created_at DESC
 		LIMIT $1`, limit)
