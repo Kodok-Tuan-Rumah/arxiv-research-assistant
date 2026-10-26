@@ -7,7 +7,13 @@ import (
 
 func RequestID() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		requestID := uuid.New().String()
+		// Keep the id supplied by an upstream caller (the gateway) so one user
+		// request can be followed across services. Only mint a new one when the
+		// header is absent or empty.
+		requestID := c.Get("X-Request-ID")
+		if requestID == "" {
+			requestID = uuid.New().String()
+		}
 		c.Set("X-Request-ID", requestID)
 		c.Locals("requestID", requestID)
 		c.Response().Header.Set("X-Request-ID", requestID)
