@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/malikimayzar/arxiv-research-assistant/internal/api"
 	"github.com/malikimayzar/arxiv-research-assistant/internal/client"
+	"github.com/malikimayzar/arxiv-research-assistant/internal/logging"
 	"github.com/malikimayzar/arxiv-research-assistant/internal/repository"
 )
 
@@ -67,9 +68,9 @@ func newFakePaper() *repository.Paper {
 	return &repository.Paper{ID: id, ArxivID: "2312.10997", Title: "test paper"}
 }
 
-func newDeleteApp(repo repository.PaperRepository, ml *client.MLClient) *fiber.App {
+func newDeleteApp(repo repository.PaperRepository, ml *client.MLClient, logger *logging.Logger) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: api.ErrorHandler})
-	app.Delete("/papers/:id", api.NewPapersHandler(repo, ml).Delete)
+	app.Delete("/papers/:id", api.NewPapersHandler(repo, ml, logger).Delete)
 	return app
 }
 
@@ -85,7 +86,8 @@ func TestDeletePaper_PurgesVectorsThenDeletesRow(t *testing.T) {
 	}))
 	defer mlSrv.Close()
 
-	app := newDeleteApp(&fakePaperRepo{paper: newFakePaper(), log: log}, client.NewMLClient(mlSrv.URL))
+	logger := logging.NewLogger("test", logging.INFO)
+	app := newDeleteApp(&fakePaperRepo{paper: newFakePaper(), log: log}, client.NewMLClient(mlSrv.URL, logger), logger)
 
 	resp, err := app.Test(httptest.NewRequest("DELETE", "/papers/"+testPaperID, nil))
 	if err != nil {
@@ -111,7 +113,8 @@ func TestDeletePaper_PurgeFailureAborts(t *testing.T) {
 	}))
 	defer mlSrv.Close()
 
-	app := newDeleteApp(&fakePaperRepo{paper: newFakePaper(), log: log}, client.NewMLClient(mlSrv.URL))
+	logger := logging.NewLogger("test", logging.INFO)
+	app := newDeleteApp(&fakePaperRepo{paper: newFakePaper(), log: log}, client.NewMLClient(mlSrv.URL, logger), logger)
 
 	resp, err := app.Test(httptest.NewRequest("DELETE", "/papers/"+testPaperID, nil))
 	if err != nil {
@@ -134,7 +137,8 @@ func TestDeletePaper_NotFoundSkipsPurge(t *testing.T) {
 	}))
 	defer mlSrv.Close()
 
-	app := newDeleteApp(&fakePaperRepo{getErr: errors.New("no rows")}, client.NewMLClient(mlSrv.URL))
+	logger := logging.NewLogger("test", logging.INFO)
+	app := newDeleteApp(&fakePaperRepo{getErr: errors.New("no rows")}, client.NewMLClient(mlSrv.URL, logger), logger)
 
 	resp, err := app.Test(httptest.NewRequest("DELETE", "/papers/"+testPaperID, nil))
 	if err != nil {
@@ -151,7 +155,8 @@ func TestDeletePaper_NotFoundSkipsPurge(t *testing.T) {
 }
 
 func TestDeletePaper_InvalidID(t *testing.T) {
-	app := newDeleteApp(&fakePaperRepo{paper: newFakePaper()}, client.NewMLClient("http://127.0.0.1:1"))
+	logger := logging.NewLogger("test", logging.INFO)
+	app := newDeleteApp(&fakePaperRepo{paper: newFakePaper()}, client.NewMLClient("http://127.0.0.1:1", logger), logger)
 
 	resp, err := app.Test(httptest.NewRequest("DELETE", "/papers/not-a-uuid", nil))
 	if err != nil {

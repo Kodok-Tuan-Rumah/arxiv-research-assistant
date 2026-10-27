@@ -13,6 +13,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/malikimayzar/arxiv-research-assistant/internal/api"
 	"github.com/malikimayzar/arxiv-research-assistant/internal/client"
+	"github.com/malikimayzar/arxiv-research-assistant/internal/logging"
 	"github.com/malikimayzar/arxiv-research-assistant/internal/repository"
 )
 
@@ -54,11 +55,12 @@ func TestQueryHandler_MLFailureIsGenericAndRequestIDForwarded(t *testing.T) {
 	}))
 	defer mlSrv.Close()
 
-	ml := client.NewMLClient(mlSrv.URL)
+	logger := logging.NewLogger("test", logging.INFO)
+	ml := client.NewMLClient(mlSrv.URL, logger)
 
 	app := fiber.New(fiber.Config{ErrorHandler: api.ErrorHandler})
 	app.Use(fixedRequestIDMiddleware())
-	app.Post("/query", api.QueryHandler(ml, &fakeLogRepo{}))
+	app.Post("/query", api.QueryHandler(ml, &fakeLogRepo{}, logger))
 
 	req := httptest.NewRequest("POST", "/query", strings.NewReader(`{"query":"hello"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -106,11 +108,12 @@ func TestQueryHandler_SuccessForwardsRequestID(t *testing.T) {
 	}))
 	defer mlSrv.Close()
 
-	ml := client.NewMLClient(mlSrv.URL)
+	logger := logging.NewLogger("test", logging.INFO)
+	ml := client.NewMLClient(mlSrv.URL, logger)
 
 	app := fiber.New(fiber.Config{ErrorHandler: api.ErrorHandler})
 	app.Use(fixedRequestIDMiddleware())
-	app.Post("/query", api.QueryHandler(ml, &fakeLogRepo{}))
+	app.Post("/query", api.QueryHandler(ml, &fakeLogRepo{}, logger))
 
 	req := httptest.NewRequest("POST", "/query", strings.NewReader(`{"query":"hello"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -146,11 +149,12 @@ func TestQueryHandler_NoChunksReturns200WithFlag(t *testing.T) {
 	}))
 	defer mlSrv.Close()
 
-	ml := client.NewMLClient(mlSrv.URL)
+	logger := logging.NewLogger("test", logging.INFO)
+	ml := client.NewMLClient(mlSrv.URL, logger)
 
 	app := fiber.New(fiber.Config{ErrorHandler: api.ErrorHandler})
 	app.Use(fixedRequestIDMiddleware())
-	app.Post("/query", api.QueryHandler(ml, &fakeLogRepo{}))
+	app.Post("/query", api.QueryHandler(ml, &fakeLogRepo{}, logger))
 
 	req := httptest.NewRequest("POST", "/query", strings.NewReader(`{"query":"hello"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -191,11 +195,12 @@ func TestQueryHandler_SuccessPersistsRequestID(t *testing.T) {
 	}))
 	defer mlSrv.Close()
 
+	logger := logging.NewLogger("test", logging.INFO)
 	repo := &fakeLogRepo{created: make(chan repository.CreateQueryLogParams, 1)}
 
 	app := fiber.New(fiber.Config{ErrorHandler: api.ErrorHandler})
 	app.Use(fixedRequestIDMiddleware())
-	app.Post("/query", api.QueryHandler(client.NewMLClient(mlSrv.URL), repo))
+	app.Post("/query", api.QueryHandler(client.NewMLClient(mlSrv.URL, logger), repo, logger))
 
 	req := httptest.NewRequest("POST", "/query", strings.NewReader(`{"query":"hello"}`))
 	req.Header.Set("Content-Type", "application/json")

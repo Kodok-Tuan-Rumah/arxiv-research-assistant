@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/malikimayzar/arxiv-research-assistant/internal/logging"
 	"github.com/sony/gobreaker"
 )
 
@@ -21,9 +22,10 @@ type MLClient struct {
 	queryCB     *gobreaker.CircuitBreaker
 	embedCB     *gobreaker.CircuitBreaker
 	ingestCB    *gobreaker.CircuitBreaker
+	logger      *logging.Logger
 }
 
-func NewMLClient(baseURL string) *MLClient {
+func NewMLClient(baseURL string, logger *logging.Logger) *MLClient {
 	return &MLClient{
 		baseURL: baseURL,
 		httpClient: &http.Client{
@@ -33,9 +35,10 @@ func NewMLClient(baseURL string) *MLClient {
 		queryClient: &http.Client{
 			Timeout: 180 * time.Second,
 		},
-		queryCB:  newCircuitBreaker("ml-query"),
-		embedCB:  newCircuitBreaker("ml-embed"),
-		ingestCB: newCircuitBreaker("ml-ingest"),
+		queryCB:  newCircuitBreaker("ml-query", logger),
+		embedCB:  newCircuitBreaker("ml-embed", logger),
+		ingestCB: newCircuitBreaker("ml-ingest", logger),
+		logger:   logger,
 	}
 }
 
@@ -171,8 +174,6 @@ func (c *MLClient) DeletePaper(arxivID string) error {
 }
 
 // StatusError represents a 4xx response from the ML service. These are valid
-// service answers (the request was understood, the rejection is deliberate),
-// so the caller receives them as-is and they never count as breaker failures.
 type StatusError struct {
 	StatusCode int
 	Detail     string
@@ -186,7 +187,6 @@ func (e *StatusError) Error() string {
 }
 
 // extractDetail pulls FastAPI's `detail` field out of an error body, falling
-// back to the trimmed raw body when the shape differs.
 func extractDetail(body []byte) string {
 	var payload struct {
 		Detail string `json:"detail"`
@@ -229,8 +229,7 @@ func (c *MLClient) Query(ctx context.Context, query string, topK int, model stri
 			return nil, fmt.Errorf("ml service returned status %d", resp.StatusCode)
 		}
 
-		// 4xx = deliberate answer (e.g. 404 "No relevant chunks found") → hand
-		// it back without tripping the breaker.
+		// 4xx = deliberate answer
 		if resp.StatusCode >= http.StatusBadRequest {
 			raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 			return &StatusError{StatusCode: resp.StatusCode, Detail: extractDetail(raw)}, nil

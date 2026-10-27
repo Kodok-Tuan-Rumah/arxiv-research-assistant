@@ -10,7 +10,7 @@ require (
 require (
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/lib/pq v1.11.2
-	github.com/prometheus/client_golang v1.23.2
+	github.com/prometheus/client_golang v1.20.5
 	github.com/sony/gobreaker v1.0.0
 )
 

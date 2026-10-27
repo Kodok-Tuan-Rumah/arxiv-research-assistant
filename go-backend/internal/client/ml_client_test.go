@@ -9,10 +9,9 @@ import (
 	"testing"
 
 	"github.com/malikimayzar/arxiv-research-assistant/internal/client"
+	"github.com/malikimayzar/arxiv-research-assistant/internal/logging"
 )
 
-// 404 "No relevant chunks found" adalah jawaban valid — 6x beruntun tidak
-// boleh membuka breaker dan tiap panggilan harus mengembalikan StatusError.
 func TestQueryBreakerIgnores4xx(t *testing.T) {
 	requests := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -23,7 +22,8 @@ func TestQueryBreakerIgnores4xx(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	ml := client.NewMLClient(srv.URL)
+	logger := logging.NewLogger("test", logging.INFO)
+	ml := client.NewMLClient(srv.URL, logger)
 
 	for i := 0; i < 6; i++ {
 		_, err := ml.Query(context.Background(), "q", 5, "m", "", "req")
@@ -47,7 +47,8 @@ func TestQueryBreakerOpensOn5xx(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	ml := client.NewMLClient(srv.URL)
+	logger := logging.NewLogger("test", logging.INFO)
+	ml := client.NewMLClient(srv.URL, logger)
 
 	for i := 0; i < 5; i++ {
 		if _, err := ml.Query(context.Background(), "q", 5, "m", "", "req"); err == nil {
@@ -69,7 +70,8 @@ func TestQueryBreakerOpensOnTransportError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	srv.Close() // server mati → transport error
 
-	ml := client.NewMLClient(srv.URL)
+	logger := logging.NewLogger("test", logging.INFO)
+	ml := client.NewMLClient(srv.URL, logger)
 
 	for i := 0; i < 5; i++ {
 		_, _ = ml.Query(context.Background(), "q", 5, "m", "", "req")

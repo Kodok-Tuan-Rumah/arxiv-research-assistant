@@ -3,11 +3,11 @@ package api
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/malikimayzar/arxiv-research-assistant/internal/client"
+	"github.com/malikimayzar/arxiv-research-assistant/internal/logging"
 	"github.com/malikimayzar/arxiv-research-assistant/internal/middleware"
 	"github.com/malikimayzar/arxiv-research-assistant/internal/repository"
 )
@@ -29,16 +29,18 @@ type QueryResponse struct {
 	InsufficientContext bool            `json:"insufficient_context,omitempty"`
 }
 
-func QueryHandler(ml *client.MLClient, logRepo repository.QueryLogRepository) fiber.Handler {
+func QueryHandler(ml *client.MLClient, logRepo repository.QueryLogRepository, logger *logging.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		requestID, _ := c.Locals("requestID").(string)
 
 		var req QueryRequest
 		if err := c.BodyParser(&req); err != nil {
+			logger.Warning("invalid request body", logging.Fields{"request_id": requestID, "error": err.Error()})
 			return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 		}
 
 		if req.Query == "" {
+			logger.Warning("empty query", logging.Fields{"request_id": requestID})
 			return fiber.NewError(fiber.StatusBadRequest, "query cannot be empty")
 		}
 		if req.TopK == 0 {
@@ -48,6 +50,13 @@ func QueryHandler(ml *client.MLClient, logRepo repository.QueryLogRepository) fi
 			req.Model = "phi3:mini"
 		}
 
+		logger.Info("query received", logging.Fields{
+			"request_id": requestID,
+			"query":      req.Query,
+			"top_k":      req.TopK,
+			"model":      req.Model,
+		})
+
 		result, err := ml.Query(c.Context(), req.Query, req.TopK, req.Model, req.ArxivID, requestID)
 		if err != nil {
 			// Empty retrieval is a valid outcome, not a failure: answer 200 with
@@ -55,6 +64,10 @@ func QueryHandler(ml *client.MLClient, logRepo repository.QueryLogRepository) fi
 			var statusErr *client.StatusError
 			if errors.As(err, &statusErr) && statusErr.StatusCode == fiber.StatusNotFound {
 				middleware.IncFailureMode("insufficient_ctx")
+				logger.Info("insufficient context response", logging.Fields{
+					"request_id": requestID,
+					"model":      req.Model,
+				})
 				return c.JSON(QueryResponse{
 					Answer:              "No relevant chunks found.",
 					Sources:             []client.Source{},
@@ -64,13 +77,23 @@ func QueryHandler(ml *client.MLClient, logRepo repository.QueryLogRepository) fi
 			}
 
 			middleware.IncFailureMode("error")
-			fmt.Printf("⚠️  query failed (request_id=%s): %v\n", requestID, err)
+			logger.Error("query failed", logging.Fields{
+				"request_id": requestID,
+				"error":      err.Error(),
+			})
 			return fiber.NewError(fiber.StatusServiceUnavailable, "ml service unavailable")
 		}
 
 		// Observe metrics
 		middleware.ObserveQdrantSearch(float64(result.RetrievalMs) / 1000)
 		middleware.ObserveOllamaGeneration(float64(result.GenerationMs) / 1000)
+
+		logger.Info("query completed", logging.Fields{
+			"request_id":      requestID,
+			"retrieval_ms":    result.RetrievalMs,
+			"generation_ms":   result.GenerationMs,
+			"sources_count":   len(result.Sources),
+		})
 
 		// Log to PostgreSQL async
 		go func() {
@@ -86,7 +109,10 @@ func QueryHandler(ml *client.MLClient, logRepo repository.QueryLogRepository) fi
 				RequestID:    requestID,
 			})
 			if err != nil {
-				fmt.Printf("⚠️  query log failed: %v\n", err)
+				logger.Error("query log failed", logging.Fields{
+					"request_id": requestID,
+					"error":      err.Error(),
+				})
 				return
 			}
 			_ = logged

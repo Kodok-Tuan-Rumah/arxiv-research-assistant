@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,12 +15,16 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/malikimayzar/arxiv-research-assistant/internal/api"
 	"github.com/malikimayzar/arxiv-research-assistant/internal/client"
+	"github.com/malikimayzar/arxiv-research-assistant/internal/logging"
 	"github.com/malikimayzar/arxiv-research-assistant/internal/middleware"
 	"github.com/malikimayzar/arxiv-research-assistant/internal/repository"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
+	// Initialize structured logger
+	log := logging.NewLogger("arxiv-go-backend", logging.INFO)
+
 	db, err := repository.NewPostgresDB(repository.Config{
 		Host:     getEnv("DB_HOST", "localhost"),
 		Port:     getEnv("DB_PORT", "5432"),
@@ -30,16 +33,17 @@ func main() {
 		DBName:   getEnv("DB_NAME", "arxiv_db"),
 	})
 	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+		log.Error("failed to connect to database", logging.Fields{"error": err.Error()})
+		os.Exit(1)
 	}
 	defer db.Close()
-	log.Println("Connected to PostgreSQL")
+	log.Info("Connected to PostgreSQL", logging.Fields{"db_host": getEnv("DB_HOST", "localhost")})
 
-	mlClient := client.NewMLClient(getEnv("ML_SERVICE_URL", "http://localhost:8001"))
+	mlClient := client.NewMLClient(getEnv("ML_SERVICE_URL", "http://localhost:8001"), log)
 	if err := mlClient.Ping(); err != nil {
-		log.Printf("ML service not reachable: %v", err)
+		log.Warning("ML service not reachable", logging.Fields{"error": err.Error(), "ml_url": getEnv("ML_SERVICE_URL", "http://localhost:8001")})
 	} else {
-		log.Println("Connected to ML service")
+		log.Info("Connected to ML service", logging.Fields{"ml_url": getEnv("ML_SERVICE_URL", "http://localhost:8001")})
 	}
 
 	app := fiber.New(fiber.Config{
@@ -62,13 +66,13 @@ func main() {
 	app.Get("/health", api.HealthHandler(db, mlClient, api.NewQdrantClient(getEnv("QDRANT_URL", "http://localhost:6333"))))
 
 	paperRepo := repository.NewPaperRepository(db)
-	papersHandler := api.NewPapersHandler(paperRepo, mlClient)
+	papersHandler := api.NewPapersHandler(paperRepo, mlClient, log)
 	app.Get("/papers", papersHandler.List)
 	app.Get("/papers/:id", papersHandler.GetByID)
 	app.Delete("/papers/:id", papersHandler.Delete)
 	logRepo := repository.NewQueryLogRepository(db)
 
-	app.Post("/query", api.QueryHandler(mlClient, logRepo))
+	app.Post("/query", api.QueryHandler(mlClient, logRepo, log))
 	app.Get("/query/history", api.QueryHistoryHandler(logRepo))
 	app.Get("/metrics", adaptor.HTTPHandler(promhttp.Handler()))
 
@@ -90,9 +94,10 @@ func main() {
 
 	// Run server in a goroutine so we can listen for OS signals.
 	go func() {
-		log.Println("Server starting on :8080")
+		log.Info("Server starting", logging.Fields{"address": ":8080"})
 		if err := app.Listen(":8080"); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("server error: %v", err)
+			log.Error("server error", logging.Fields{"error": err.Error()})
+			os.Exit(1)
 		}
 	}()
 
@@ -100,15 +105,16 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
-	log.Println("Shutting down server...")
+	log.Info("Shutting down server", logging.Fields{})
 
 	close(done)
 
 	if err := app.ShutdownWithTimeout(10 * time.Second); err != nil {
-		log.Printf("server shutdown error: %v", err)
+		log.Error("server shutdown error", logging.Fields{"error": err.Error()})
 	}
 
-	log.Println("Server stopped")
+	log.Info("Server stopped", logging.Fields{})
+	log.Info("Active goroutines", logging.Fields{"count": runtime.NumGoroutine()})
 }
 
 func getEnv(key, fallback string) string {

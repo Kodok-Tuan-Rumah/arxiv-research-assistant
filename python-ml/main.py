@@ -1,14 +1,20 @@
 import logging
+import uuid
 from contextlib import asynccontextmanager
 
 import state
 from engine.retrieval.qdrant_client import ensure_collection, get_client
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from prometheus_fastapi_instrumentator import Instrumentator
 from routers import chunk, embed, ingest, papers, query
 from sentence_transformers import SentenceTransformer
 
-logging.basicConfig(level=logging.INFO)
+# Structured logging setup
+logging.basicConfig(
+    level=logging.INFO,
+    format='{"timestamp": "%(asctime)s", "level": "%(levelname)s", "service": "arxiv-ml", "message": "%(message)s"}',
+    datefmt="%Y-%m-%dT%H:%M:%SZ"
+)
 logger = logging.getLogger(__name__)
 
 
@@ -32,6 +38,15 @@ app.include_router(chunk.router)
 app.include_router(ingest.router)
 app.include_router(papers.router)
 app.include_router(query.router)
+
+
+@app.middleware("http")
+async def add_request_id(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    request.state.request_id = request_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
 
 
 @app.get("/health")
