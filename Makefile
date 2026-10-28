@@ -35,7 +35,7 @@ setup:
 	@echo "🔨 Building Go backend..."
 	cd go-backend && go mod tidy && go build ./...
 	@echo ""
-	@echo "✅ Setup complete!"
+	@echo "[OK] Setup complete!"
 	@echo ""
 	@echo "Next steps:"
 	@echo "  Terminal 1: make run-ml"

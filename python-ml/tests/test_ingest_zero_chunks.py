@@ -1,10 +1,8 @@
-"""A3: tolak zero-chunk sebelum menulis apa pun ke PG atau Qdrant."""
 import tempfile
 from types import SimpleNamespace
 
-import fitz  # pymupdf
+import fitz
 import pytest
-
 import routers.ingest as ingest_mod
 from engine.ingestion.pdf_parser import (
     MIN_EXTRACTED_CHARS,
@@ -36,8 +34,6 @@ class FakeConn:
 
 
 class Harness:
-    """Stub semua dependency ingest() dan rekam urutan pemanggilan."""
-
     def __init__(self, parsed_text="full text " * 10, chunk_result=None):
         self.calls = []
         self.conn = FakeConn(self.calls)
@@ -73,7 +69,6 @@ class Harness:
         self.calls.append("chunk_text")
         if self.chunk_result is not None:
             return list(self.chunk_result)
-        # Mirror the real chunker: empty text yields zero chunks.
         return [text.strip()] if text.strip() else []
 
     def get_client(self):
@@ -84,7 +79,9 @@ class Harness:
 
     def snapshot_by_arxiv_id(self, client, arxiv_id):
         self.calls.append("qdrant_snapshot")
-        return [{"id": "old-point-1", "vector": [0.0], "payload": {"arxiv_id": arxiv_id}}]
+        return [
+            {"id": "old-point-1", "vector": [0.0], "payload": {"arxiv_id": arxiv_id}}
+        ]
 
     def restore_snapshot(self, client, arxiv_id, snapshot):
         self.calls.append("qdrant_restore")
@@ -103,11 +100,15 @@ class Harness:
         monkeypatch.setattr(ingest_mod, "upsert_paper", self.upsert_paper)
         monkeypatch.setattr(ingest_mod, "insert_chunks", self.insert_chunks)
         monkeypatch.setattr(ingest_mod, "fetch_metadata", self.fetch_metadata)
-        monkeypatch.setattr(ingest_mod, "download_and_parse_pdf", self.download_and_parse_pdf)
+        monkeypatch.setattr(
+            ingest_mod, "download_and_parse_pdf", self.download_and_parse_pdf
+        )
         monkeypatch.setattr(ingest_mod, "chunk_text", self.chunk_text)
         monkeypatch.setattr(ingest_mod, "get_client", self.get_client)
         monkeypatch.setattr(ingest_mod, "ensure_collection", self.ensure_collection)
-        monkeypatch.setattr(ingest_mod, "snapshot_by_arxiv_id", self.snapshot_by_arxiv_id)
+        monkeypatch.setattr(
+            ingest_mod, "snapshot_by_arxiv_id", self.snapshot_by_arxiv_id
+        )
         monkeypatch.setattr(ingest_mod, "restore_snapshot", self.restore_snapshot)
         monkeypatch.setattr(ingest_mod, "delete_stale_chunks", self.delete_stale_chunks)
         monkeypatch.setattr(ingest_mod, "upsert_chunks", self.upsert_chunks)
@@ -153,7 +154,6 @@ def test_valid_paper_still_ingests(monkeypatch):
 
 
 def _write_pdf(text: str) -> str:
-    """Buat PDF asli di temp file; teks kosong berarti halaman tanpa teks."""
     doc = fitz.open()
     page = doc.new_page()
     if text:
@@ -166,28 +166,22 @@ def _write_pdf(text: str) -> str:
 
 def test_blank_pdf_is_rejected():
     path = _write_pdf("")
-
     with pytest.raises(PdfParseError) as excinfo:
         extract_pdf_text(path)
-
     assert excinfo.value.code == "no_extractable_text"
 
 
 def test_short_pdf_is_rejected():
     path = _write_pdf("che miti lengkung")
-
     with pytest.raises(PdfParseError) as excinfo:
         extract_pdf_text(path)
-
     assert excinfo.value.code == "extracted_text_too_short"
     assert "only" in str(excinfo.value)
 
 
 def test_long_enough_pdf_is_accepted():
     path = _write_pdf("a" * (MIN_EXTRACTED_CHARS + 5))
-
     text = extract_pdf_text(path)
-
     assert text.startswith("a")
     assert len(text) >= MIN_EXTRACTED_CHARS
 

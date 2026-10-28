@@ -2,26 +2,22 @@ import logging
 import os
 import uuid
 
+from engine.arxiv_id import normalize_arxiv_id
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
-
-from engine.arxiv_id import normalize_arxiv_id
 
 logger = logging.getLogger(__name__)
 
 COLLECTION_NAME = "arxiv_chunks"
 VECTOR_SIZE = 384
 
-def get_client(host: str | None = None, port: int | None = None) -> QdrantClient:
-    """Create a Qdrant client.
 
-    Prefers QDRANT_URL (set by docker-compose) so the client targets the
-    shared qdrant container; falls back to host/port for local runs.
-    """
+def get_client(host: str | None = None, port: int | None = None) -> QdrantClient:
     url = os.getenv("QDRANT_URL")
     if url:
         return QdrantClient(url=url)
     return QdrantClient(host=host or "localhost", port=port or 6333)
+
 
 def ensure_collection(client: QdrantClient):
     collections = [c.name for c in client.get_collections().collections]
@@ -34,15 +30,17 @@ def ensure_collection(client: QdrantClient):
     else:
         logger.info(f"Collection already exists: {COLLECTION_NAME}")
 
+
 def compute_point_ids(arxiv_id: str, count: int) -> list[str]:
-    """Deterministic point ids: same paper + position always yields the same id."""
     arxiv_id = normalize_arxiv_id(arxiv_id)
     return [
-        str(uuid.uuid5(uuid.NAMESPACE_URL, f"{arxiv_id}:{i}"))
-        for i in range(count)
+        str(uuid.uuid5(uuid.NAMESPACE_URL, f"{arxiv_id}:{i}")) for i in range(count)
     ]
 
-def upsert_chunks(client: QdrantClient, chunks: list[dict], ids: list[str] | None = None) -> list[str]:
+
+def upsert_chunks(
+    client: QdrantClient, chunks: list[dict], ids: list[str] | None = None
+) -> list[str]:
     if not chunks:
         return []
 
@@ -61,7 +59,7 @@ def upsert_chunks(client: QdrantClient, chunks: list[dict], ids: list[str] | Non
                 "arxiv_id": chunk.get("arxiv_id", ""),
                 "text": chunk["text"],
                 "categories": chunk.get("categories", []),
-            }
+            },
         )
         for i, chunk in enumerate(chunks)
     ]
@@ -70,8 +68,8 @@ def upsert_chunks(client: QdrantClient, chunks: list[dict], ids: list[str] | Non
     logger.info(f"Upserted {len(points)} chunks to Qdrant")
     return ids
 
+
 def delete_by_arxiv_id(client: QdrantClient, arxiv_id: str) -> None:
-    """Remove all stored vectors of a paper (called before re-ingest to avoid duplicates)."""
     from qdrant_client.models import FieldCondition, Filter, FilterSelector, MatchValue
 
     arxiv_id = normalize_arxiv_id(arxiv_id)
@@ -87,11 +85,12 @@ def delete_by_arxiv_id(client: QdrantClient, arxiv_id: str) -> None:
 
 
 def snapshot_by_arxiv_id(client: QdrantClient, arxiv_id: str) -> list[dict]:
-    """Return every point of a paper as {id, vector, payload} (A4 compensation)."""
     from qdrant_client.models import FieldCondition, Filter, MatchValue
 
     arxiv_id = normalize_arxiv_id(arxiv_id)
-    must = Filter(must=[FieldCondition(key="arxiv_id", match=MatchValue(value=arxiv_id))])
+    must = Filter(
+        must=[FieldCondition(key="arxiv_id", match=MatchValue(value=arxiv_id))]
+    )
 
     collected: list = []
     offset = None
@@ -117,27 +116,35 @@ def snapshot_by_arxiv_id(client: QdrantClient, arxiv_id: str) -> list[dict]:
 
 
 def restore_snapshot(client: QdrantClient, arxiv_id: str, snapshot: list[dict]) -> None:
-    """Drop the paper's current points, then re-create them from the snapshot."""
     from qdrant_client.models import PointStruct
 
     arxiv_id = normalize_arxiv_id(arxiv_id)
     delete_by_arxiv_id(client, arxiv_id)
     if snapshot:
         points = [
-            PointStruct(id=point["id"], vector=point["vector"], payload=point.get("payload") or {})
+            PointStruct(
+                id=point["id"],
+                vector=point["vector"],
+                payload=point.get("payload") or {},
+            )
             for point in snapshot
         ]
         client.upsert(collection_name=COLLECTION_NAME, points=points)
     logger.info(f"Restored snapshot for {arxiv_id}: {len(snapshot)} vector(s)")
 
 
-def delete_stale_chunks(client: QdrantClient, arxiv_id: str, keep_ids: list[str]) -> int:
-    """Delete points of the paper whose id is not in keep_ids. Returns how many."""
+def delete_stale_chunks(
+    client: QdrantClient, arxiv_id: str, keep_ids: list[str]
+) -> int:
     from qdrant_client.models import PointIdsList
 
     arxiv_id = normalize_arxiv_id(arxiv_id)
     keep = set(keep_ids)
-    stale = [point for point in snapshot_by_arxiv_id(client, arxiv_id) if point["id"] not in keep]
+    stale = [
+        point
+        for point in snapshot_by_arxiv_id(client, arxiv_id)
+        if point["id"] not in keep
+    ]
     if stale:
         client.delete(
             collection_name=COLLECTION_NAME,
@@ -147,7 +154,12 @@ def delete_stale_chunks(client: QdrantClient, arxiv_id: str, keep_ids: list[str]
     return len(stale)
 
 
-def search(client: QdrantClient, query_vector: list[float], top_k: int = 5, arxiv_id: str | None = None):
+def search(
+    client: QdrantClient,
+    query_vector: list[float],
+    top_k: int = 5,
+    arxiv_id: str | None = None,
+):
     from qdrant_client.models import FieldCondition, Filter, MatchValue
 
     query_filter = None

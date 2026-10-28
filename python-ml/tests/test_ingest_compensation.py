@@ -1,4 +1,3 @@
-"""A4: urutan ingest non-destruktif + kompensasi snapshot saat gagal."""
 from types import SimpleNamespace
 
 import routers.ingest as ingest_mod
@@ -31,8 +30,6 @@ class FakeConn:
 
 
 class Harness:
-    """Stub semua dependency ingest() dan rekam urutan pemanggilan."""
-
     def __init__(
         self,
         upsert_error=None,
@@ -48,7 +45,9 @@ class Harness:
         self.restore_error = restore_error
         self.delete_stale_error = delete_stale_error
         self.inserted_ids = None
-        self.snapshot = [{"id": "old-point-1", "vector": [0.0], "payload": {"arxiv_id": ARXIV_ID}}]
+        self.snapshot = [
+            {"id": "old-point-1", "vector": [0.0], "payload": {"arxiv_id": ARXIV_ID}}
+        ]
 
     def get_connection(self):
         self.calls.append("get_connection")
@@ -63,7 +62,6 @@ class Harness:
         self.inserted_ids = list(ids)
 
     def delete_paper(self, conn, paper_id):
-        # Tidak ada lagi alur yang boleh menghapus baris PG setelah komit.
         self.calls.append("delete_paper")
 
     def fetch_metadata(self, arxiv_ids):
@@ -120,11 +118,15 @@ class Harness:
         monkeypatch.setattr(ingest_mod, "upsert_paper", self.upsert_paper)
         monkeypatch.setattr(ingest_mod, "insert_chunks", self.insert_chunks)
         monkeypatch.setattr(ingest_mod, "fetch_metadata", self.fetch_metadata)
-        monkeypatch.setattr(ingest_mod, "download_and_parse_pdf", self.download_and_parse_pdf)
+        monkeypatch.setattr(
+            ingest_mod, "download_and_parse_pdf", self.download_and_parse_pdf
+        )
         monkeypatch.setattr(ingest_mod, "chunk_text", self.chunk_text)
         monkeypatch.setattr(ingest_mod, "get_client", self.get_client)
         monkeypatch.setattr(ingest_mod, "ensure_collection", self.ensure_collection)
-        monkeypatch.setattr(ingest_mod, "snapshot_by_arxiv_id", self.snapshot_by_arxiv_id)
+        monkeypatch.setattr(
+            ingest_mod, "snapshot_by_arxiv_id", self.snapshot_by_arxiv_id
+        )
         monkeypatch.setattr(ingest_mod, "restore_snapshot", self.restore_snapshot)
         monkeypatch.setattr(ingest_mod, "delete_stale_chunks", self.delete_stale_chunks)
         monkeypatch.setattr(ingest_mod, "upsert_chunks", self.upsert_chunks)
@@ -196,7 +198,10 @@ def test_stale_delete_failure_does_not_fail_ingest(monkeypatch):
 
 
 def test_restore_failure_is_contained(monkeypatch):
-    h = Harness(upsert_error=RuntimeError("qdrant down"), restore_error=RuntimeError("also down"))
+    h = Harness(
+        upsert_error=RuntimeError("qdrant down"),
+        restore_error=RuntimeError("also down"),
+    )
     result = h.run(monkeypatch)
 
     assert result.failed == [ARXIV_ID]

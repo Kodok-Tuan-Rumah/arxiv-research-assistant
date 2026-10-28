@@ -1,6 +1,4 @@
-"""A1: satu bentuk kanonik arXiv id (unversioned) untuk seluruh jalur."""
 import pytest
-
 from engine.arxiv_id import is_valid_arxiv_id, normalize_arxiv_id
 
 
@@ -12,11 +10,12 @@ def test_normalize_strips_version_suffix():
 
 def test_normalize_is_idempotent():
     once = normalize_arxiv_id("2312.10997v3")
-
     assert normalize_arxiv_id(once) == once
 
 
-@pytest.mark.parametrize("value", ["", "   ", "not-an-arxiv-id", "2312.109", "2312.109977"])
+@pytest.mark.parametrize(
+    "value", ["", "   ", "not-an-arxiv-id", "2312.109", "2312.109977"]
+)
 def test_normalize_rejects_empty_and_invalid(value):
     with pytest.raises(ValueError):
         normalize_arxiv_id(value)

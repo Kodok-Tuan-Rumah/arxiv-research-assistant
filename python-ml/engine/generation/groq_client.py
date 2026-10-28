@@ -9,8 +9,10 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL = "llama-3.3-70b-versatile"
 
+
 class GroqError(Exception):
     pass
+
 
 def build_prompt(query: str, context_chunks: list[str]) -> str:
     safe_chunks = [
@@ -27,6 +29,7 @@ def build_prompt(query: str, context_chunks: list[str]) -> str:
         f"Question: {query}\n\n"
         "Answer:"
     )
+
 
 def generate(
     query: str,
@@ -63,7 +66,9 @@ def generate(
 
     logger.info(
         "Groq generation | model=%s latency=%dms chars=%d",
-        model, latency_ms, len(answer),
+        model,
+        latency_ms,
+        len(answer),
     )
 
     return {

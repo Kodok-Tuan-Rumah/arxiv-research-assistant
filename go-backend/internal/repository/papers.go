@@ -104,6 +104,9 @@ func (r *paperRepo) GetByArxivID(ctx context.Context, arxivID string) (*Paper, e
 		WHERE p.arxiv_id = $1
 		GROUP BY p.id`, arxivID).StructScan(&p)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
 		return nil, fmt.Errorf("paperRepo.GetByArxivID: %w", err)
 	}
 	return &p, nil

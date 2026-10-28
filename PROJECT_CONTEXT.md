@@ -1,7 +1,7 @@
 # PROJECT CONTEXT — ArXiv Research Assistant
 > **Repo:** `arxiv-research-assistant`  
-> **Runtime Snapshot:** 2026-10-19  
-> **Integration Status:** Integrated with `ws-net` under root compose (Mode A)  
+> **Runtime Snapshot:** 2026-10-26  
+> **Integration Status:** Integrated with `ws-net` under root compose (Mode A). MCP gateway routes to this backend via `ARXIV_SERVICE_URL`.  
 
 ---
 

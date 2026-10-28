@@ -1,8 +1,6 @@
 from types import SimpleNamespace
 
 import pytest
-from qdrant_client.models import FilterSelector, PointIdsList
-
 from engine.retrieval.qdrant_client import (
     COLLECTION_NAME,
     compute_point_ids,
@@ -13,6 +11,7 @@ from engine.retrieval.qdrant_client import (
     snapshot_by_arxiv_id,
     upsert_chunks,
 )
+from qdrant_client.models import FilterSelector, PointIdsList
 
 
 class FakeQdrant:
@@ -33,9 +32,18 @@ class FakeQdrant:
         self.searches.append((collection_name, query, limit, query_filter))
         return SimpleNamespace(points=[])
 
-    def scroll(self, collection_name, scroll_filter=None, limit=10, offset=None,
-               with_vectors=False, with_payload=False):
-        self.scrolls.append((collection_name, scroll_filter, with_vectors, with_payload))
+    def scroll(
+        self,
+        collection_name,
+        scroll_filter=None,
+        limit=10,
+        offset=None,
+        with_vectors=False,
+        with_payload=False,
+    ):
+        self.scrolls.append(
+            (collection_name, scroll_filter, with_vectors, with_payload)
+        )
         return self.scroll_result, None
 
 
@@ -129,7 +137,11 @@ def test_compute_point_ids_are_same_for_versioned_and_unversioned():
 def test_snapshot_normalizes_id_and_converts_points():
     client = FakeQdrant()
     client.scroll_result = [
-        SimpleNamespace(id="p1", vector=[0.0, 1.0], payload={"arxiv_id": "2312.10997v2", "text": "t"}),
+        SimpleNamespace(
+            id="p1",
+            vector=[0.0, 1.0],
+            payload={"arxiv_id": "2312.10997v2", "text": "t"},
+        ),
         SimpleNamespace(id="p2", vector=[1.0, 0.0], payload=None),
     ]
 

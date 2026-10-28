@@ -2,21 +2,22 @@ import logging
 import os
 import time
 
-from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
-
 import state as app_state
 from engine.generation import groq_client, ollama_client
 from engine.retrieval.qdrant_client import get_client, search
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
 
 class QueryRequest(BaseModel):
     query: str
     top_k: int = 5
     model: str = "phi3:mini"
     arxiv_id: str | None = None
+
 
 class QueryResponse(BaseModel):
     answer: str
@@ -25,14 +26,16 @@ class QueryResponse(BaseModel):
     generation_ms: int
     model: str
 
+
 def get_provider():
     return os.getenv("LLM_PROVIDER", "ollama")
 
+
 def embed_query(query: str) -> list:
     if app_state.model is None:
-        # Startup loads the model unconditionally; this guard is defensive.
         raise HTTPException(status_code=503, detail="embedding model not loaded")
     return app_state.model.encode([query])[0].tolist()
+
 
 @router.post("/query", response_model=QueryResponse)
 def query(payload: QueryRequest, request: Request):
@@ -66,7 +69,9 @@ def query(payload: QueryRequest, request: Request):
             model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
             generation = groq_client.generate(payload.query, context_chunks, model)
         else:
-            generation = ollama_client.generate(payload.query, context_chunks, payload.model)
+            generation = ollama_client.generate(
+                payload.query, context_chunks, payload.model
+            )
     except Exception:
         logger.exception("[%s] Generation failed (%s)", request_id, provider)
         raise HTTPException(status_code=500, detail="generation failed")

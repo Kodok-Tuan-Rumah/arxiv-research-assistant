@@ -10,8 +10,10 @@ logger = logging.getLogger(__name__)
 OLLAMA_URL = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 DEFAULT_MODEL = "phi3:mini"
 
+
 class OllamaError(Exception):
     pass
+
 
 def build_prompt(query: str, context_chunks: list[str]) -> str:
     safe_chunks = [
@@ -29,6 +31,7 @@ def build_prompt(query: str, context_chunks: list[str]) -> str:
         "Answer:"
     )
 
+
 def generate(
     query: str,
     context_chunks: list[str],
@@ -42,9 +45,7 @@ def generate(
     start = time.time()
 
     try:
-        with httpx.Client(
-            timeout=httpx.Timeout(600.0, connect=10.0)
-        ) as client:
+        with httpx.Client(timeout=httpx.Timeout(600.0, connect=10.0)) as client:
             response = client.post(
                 f"{OLLAMA_URL}/api/generate",
                 json={

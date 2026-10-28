@@ -28,21 +28,7 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      # image qdrant tidak punya curl — probe port via bash /dev/tcp (konsisten root compose)
       test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/6333'"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - arxiv-net
-
-  redis:
-    image: redis:7-alpine
-    container_name: arxiv-redis
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -53,12 +39,10 @@ services:
     image: ollama/ollama:latest
     container_name: arxiv-ollama
     ports:
-      # 11434 di host dipakai daemon Ollama host — petakan ke 11435 (konsisten root compose)
       - "11435:11434"
     volumes:
       - ollama_data:/root/.ollama
     healthcheck:
-      # image ollama tidak punya curl — probe port via bash /dev/tcp
       test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/11434'"]
       interval: 10s
       timeout: 5s
@@ -82,7 +66,6 @@ services:
       QDRANT_URL: http://qdrant:6333
       OLLAMA_HOST: http://ollama:11434
       LLM_PROVIDER: ollama
-      # Groq tersedia bila LLM_PROVIDER diganti "groq" (konsisten root compose)
       GROQ_MODEL: openai/gpt-oss-20b
       GROQ_API_KEY: ${GROQ_API_KEY:-}
     depends_on:
@@ -93,8 +76,13 @@ services:
       ollama:
         condition: service_healthy
     healthcheck:
-      # image python:slim tidak punya curl — probe dengan urllib
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=5)"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=5)",
+        ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -140,8 +128,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.retention.time=7d'
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=7d"
     networks:
       - arxiv-net
 

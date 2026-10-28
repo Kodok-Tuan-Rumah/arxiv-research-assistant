@@ -3,7 +3,7 @@
 > **Role:** ArXiv Academic Ingestion & Paper-Scoped Retrieval Service  
 > **Architecture:** Two-Tier Service (Go Fiber `:8080` + Python FastAPI `:8001`)  
 > **Status:** Core ingestion/query paths have hardening and unit-test coverage; production readiness has not been established.
-> **Last Updated:** 2026-10-22
+> **Last Updated:** 2026-10-26
 
 ---
 

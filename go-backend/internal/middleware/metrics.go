@@ -73,9 +73,6 @@ func Metrics() fiber.Handler {
 		err := c.Next()
 		duration := time.Since(start).Seconds()
 		status := strconv.Itoa(c.Response().StatusCode())
-		// Fiber returns strings backed by the request buffer. Prometheus keeps
-		// label values beyond the request lifetime, so cloning prevents a later
-		// request from mutating an earlier label (for example POST -> GETT).
 		method := strings.Clone(c.Method())
 		path := strings.Clone(c.Route().Path)
 		httpRequestsTotal.WithLabelValues(method, path, status).Inc()

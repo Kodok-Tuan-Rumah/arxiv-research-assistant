@@ -4,13 +4,13 @@ Di mana sistem bisa salah dan dampaknya.
 
 ## Failure Modes
 
-| Component | Failure | Impact | Mitigation |
-|-----------|---------|--------|------------|
-| Qdrant down | Vector search gagal | Query 500 | Circuit breaker, retry |
-| PostgreSQL down | Metadata tidak tersimpan | Degraded (query masih jalan) | Graceful degrade |
-| ML Service down | Semua AI features down | Query 500 | Health check, restart policy |
-| Ollama timeout | Generation lambat | Query timeout | Reduce context, smaller model |
-| Disk penuh | Qdrant/PostgreSQL write fail | Ingest gagal | Disk monitoring alert |
+| Component       | Failure                      | Impact                       | Mitigation                    |
+| --------------- | ---------------------------- | ---------------------------- | ----------------------------- |
+| Qdrant down     | Vector search gagal          | Query 500                    | Circuit breaker, retry        |
+| PostgreSQL down | Metadata tidak tersimpan     | Degraded (query masih jalan) | Graceful degrade              |
+| ML Service down | Semua AI features down       | Query 500                    | Health check, restart policy  |
+| Ollama timeout  | Generation lambat            | Query timeout                | Reduce context, smaller model |
+| Disk penuh      | Qdrant/PostgreSQL write fail | Ingest gagal                 | Disk monitoring alert         |
 
 ## Known Weaknesses
 
@@ -36,8 +36,8 @@ Fix: Gunakan model berbeda untuk evaluasi.
 
 ## Chaos Test Results
 
-| Scenario | Behavior | Status |
-|----------|----------|--------|
-| Qdrant down | 500 error dengan request_id | ⚠️ Perlu 503 + pesan lebih jelas |
-| PostgreSQL down | Health degraded, query masih jalan | ✅ Graceful |
-| ML service down | Health degraded, query 500 | ✅ Detected |
+| Scenario        | Behavior                           | Status                                |
+| --------------- | ---------------------------------- | ------------------------------------- |
+| Qdrant down     | 500 error dengan request_id        | [ERROR] Perlu 503 + pesan lebih jelas |
+| PostgreSQL down | Health degraded, query masih jalan | [OK] Graceful                         |
+| ML service down | Health degraded, query 500         | [OK] Detected                         |

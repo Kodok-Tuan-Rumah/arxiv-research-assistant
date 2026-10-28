@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -18,7 +19,6 @@ type HealthResponse struct {
 }
 
 // qdrantClient is a small interface so the health check can be unit-tested
-// without a live Qdrant instance.
 type qdrantClient interface {
 	Health(ctx context.Context) error
 }
@@ -59,30 +59,7 @@ type statusError struct {
 }
 
 func (e *statusError) Error() string {
-	return "qdrant returned status " + itoa(e.code)
-}
-
-func itoa(i int) string {
-	// Avoid importing strconv for a single integer.
-	if i == 0 {
-		return "0"
-	}
-	neg := i < 0
-	if neg {
-		i = -i
-	}
-	var buf [20]byte
-	pos := len(buf)
-	for i > 0 {
-		pos--
-		buf[pos] = byte('0' + i%10)
-		i /= 10
-	}
-	if neg {
-		pos--
-		buf[pos] = '-'
-	}
-	return string(buf[pos:])
+	return "qdrant returned status " + strconv.Itoa(e.code)
 }
 
 func HealthHandler(db *sqlx.DB, ml *client.MLClient, qdrant qdrantClient) fiber.Handler {

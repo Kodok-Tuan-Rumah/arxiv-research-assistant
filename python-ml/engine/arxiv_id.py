@@ -1,4 +1,3 @@
-"""Canonical arXiv identifier handling."""
 import re
 
 _VERSION_SUFFIX = re.compile(r"v\d+$")
@@ -6,11 +5,6 @@ _VALID = re.compile(r"^\d{4}\.\d{4,5}$")
 
 
 def normalize_arxiv_id(value: str) -> str:
-    """Return the unversioned canonical arXiv id.
-
-    Accepts '2312.10997', '2312.10997v1', '2312.10997v12'.
-    Raises ValueError for empty/invalid values.
-    """
     if not isinstance(value, str):
         raise ValueError(f"invalid arxiv id: {value!r}")
 
@@ -21,5 +15,4 @@ def normalize_arxiv_id(value: str) -> str:
 
 
 def is_valid_arxiv_id(value: str) -> bool:
-    """True if value is a valid unversioned arXiv id."""
     return isinstance(value, str) and _VALID.fullmatch(value) is not None

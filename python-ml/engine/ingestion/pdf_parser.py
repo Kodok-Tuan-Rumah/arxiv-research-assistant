@@ -2,7 +2,7 @@ import logging
 import os
 import tempfile
 
-import fitz  # pymupdf
+import fitz
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -12,15 +12,12 @@ MIN_EXTRACTED_CHARS = 50
 
 
 class PdfParseError(ValueError):
-    """A PDF could not be turned into ingestable text (carries an error code)."""
-
     def __init__(self, code: str, message: str):
         super().__init__(message)
         self.code = code
 
 
 def extract_pdf_text(tmp_path: str) -> str:
-    """Convert an openable PDF file into text, refusing empty/short extractions."""
     doc = fitz.open(tmp_path)
     try:
         text = ""
@@ -56,7 +53,9 @@ def download_and_parse_pdf(pdf_url: str) -> str:
             and content_length.isdigit()
             and int(content_length) > MAX_PDF_BYTES
         ):
-            raise ValueError(f"PDF too large: {content_length} bytes (max {MAX_PDF_BYTES})")
+            raise ValueError(
+                f"PDF too large: {content_length} bytes (max {MAX_PDF_BYTES})"
+            )
 
         data = bytearray()
         for part in response.iter_bytes(chunk_size=65536):

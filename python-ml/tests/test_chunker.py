@@ -1,5 +1,4 @@
 import pytest
-
 from engine.ingestion.chunker import MAX_TEXT_CHARS, chunk_text
 
 

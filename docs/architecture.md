@@ -3,11 +3,13 @@
 ## Overview
 
 ArXiv Research Assistant adalah sistem RAG (Retrieval Augmented Generation) yang dibangun dengan prinsip:
+
 - Setiap service punya tanggung jawab yang jelas
 - Semua failure modes terdokumentasi
 - Sistem bisa dimonitor dan di-debug secara independen
 
 ## Layer Architecture
+
 ```
 CLIENT (curl / browser)
     │
@@ -66,6 +68,7 @@ MONITORING
 ## Embedding Model
 
 Model: `all-MiniLM-L6-v2`
+
 - Dimensi: 384
 - Distance metric: Cosine similarity
 - Alasan: Ringan, cepat, dan performa baik untuk semantic search
