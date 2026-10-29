@@ -2,11 +2,13 @@ package api_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -53,6 +55,9 @@ func (f *fakePaperRepo) GetByID(_ context.Context, _ uuid.UUID) (*repository.Pap
 }
 
 func (f *fakePaperRepo) GetByArxivID(_ context.Context, _ string) (*repository.Paper, error) {
+	if f.getErr != nil {
+		return nil, f.getErr
+	}
 	return f.paper, nil
 }
 
@@ -72,6 +77,91 @@ func newDeleteApp(repo repository.PaperRepository, ml *client.MLClient, logger *
 	app := fiber.New(fiber.Config{ErrorHandler: api.ErrorHandler})
 	app.Delete("/papers/:id", api.NewPapersHandler(repo, ml, logger).Delete)
 	return app
+}
+
+func newSourceApp(repo repository.PaperRepository, ml *client.MLClient, logger *logging.Logger) *fiber.App {
+	app := fiber.New(fiber.Config{ErrorHandler: api.ErrorHandler})
+	app.Get("/papers/source/:arxiv_id", api.NewPapersHandler(repo, ml, logger).Source)
+	return app
+}
+
+func TestPaperSource_ReturnsMetadata(t *testing.T) {
+	published := time.Date(2017, 6, 12, 0, 0, 0, 0, time.UTC)
+	id, _ := uuid.Parse(testPaperID)
+	repo := &fakePaperRepo{
+		paper: &repository.Paper{
+			ID:        id,
+			ArxivID:   "1706.03762",
+			Title:     "Attention Is All You Need",
+			Authors:   []string{"Ashish Vaswani", "Noam Shazeer"},
+			Published: &published,
+		},
+	}
+	logger := logging.NewLogger("test", logging.INFO)
+	app := newSourceApp(repo, client.NewMLClient("http://127.0.0.1:1", logger), logger)
+
+	for _, tc := range []struct {
+		name string
+		path string
+	}{
+		{"raw id", "/papers/source/1706.03762"},
+		{"arxiv prefix", "/papers/source/arxiv:1706.03762"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resp, err := app.Test(httptest.NewRequest("GET", tc.path, nil))
+			if err != nil {
+				t.Fatalf("request failed: %v", err)
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != fiber.StatusOK {
+				t.Fatalf("expected 200, got %d", resp.StatusCode)
+			}
+
+			var body struct {
+				SourceID string   `json:"source_id"`
+				Title    string   `json:"title"`
+				Authors  []string `json:"authors"`
+				Year     int      `json:"year"`
+				URL      string   `json:"url"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+				t.Fatalf("decode body: %v", err)
+			}
+
+			if body.SourceID != "arxiv:1706.03762" {
+				t.Errorf("source_id = %q, want arxiv:1706.03762", body.SourceID)
+			}
+			if body.Title != "Attention Is All You Need" {
+				t.Errorf("title = %q, want Attention Is All You Need", body.Title)
+			}
+			if len(body.Authors) != 2 || body.Authors[0] != "Ashish Vaswani" || body.Authors[1] != "Noam Shazeer" {
+				t.Errorf("authors = %v, want [Ashish Vaswani Noam Shazeer]", body.Authors)
+			}
+			if body.Year != 2017 {
+				t.Errorf("year = %d, want 2017", body.Year)
+			}
+			if body.URL != "https://arxiv.org/abs/1706.03762" {
+				t.Errorf("url = %q, want https://arxiv.org/abs/1706.03762", body.URL)
+			}
+		})
+	}
+}
+
+func TestPaperSource_NotFound(t *testing.T) {
+	repo := &fakePaperRepo{getErr: repository.ErrNotFound}
+	logger := logging.NewLogger("test", logging.INFO)
+	app := newSourceApp(repo, client.NewMLClient("http://127.0.0.1:1", logger), logger)
+
+	resp, err := app.Test(httptest.NewRequest("GET", "/papers/source/arxiv:9999.99999", nil))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusNotFound {
+		t.Fatalf("expected 404, got %d", resp.StatusCode)
+	}
 }
 
 func TestDeletePaper_PurgesVectorsThenDeletesRow(t *testing.T) {
