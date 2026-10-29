@@ -68,6 +68,7 @@ func main() {
 	paperRepo := repository.NewPaperRepository(db)
 	papersHandler := api.NewPapersHandler(paperRepo, mlClient, log)
 	app.Get("/papers", papersHandler.List)
+	app.Get("/papers/source/:arxiv_id", papersHandler.Source)
 	app.Get("/papers/:id", papersHandler.GetByID)
 	app.Delete("/papers/:id", papersHandler.Delete)
 	logRepo := repository.NewQueryLogRepository(db)

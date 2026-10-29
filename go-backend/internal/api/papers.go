@@ -77,6 +77,53 @@ func (h *PapersHandler) GetByID(c *fiber.Ctx) error {
 	return c.JSON(paper)
 }
 
+func (h *PapersHandler) Source(c *fiber.Ctx) error {
+	requestID, _ := c.Locals("requestID").(string)
+	raw := c.Params("arxiv_id")
+	arxivID := raw
+	if arxivID == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "arxiv_id is required")
+	}
+	// Accept both "1706.03762" and "arxiv:1706.03762".
+	if len(arxivID) > 6 && arxivID[:6] == "arxiv:" {
+		arxivID = arxivID[6:]
+	}
+
+	paper, err := h.repo.GetByArxivID(c.Context(), arxivID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			h.logger.Info("paper not found", logging.Fields{
+				"request_id": requestID,
+				"arxiv_id":   arxivID,
+			})
+			return fiber.NewError(fiber.StatusNotFound, "paper not found")
+		}
+		h.logger.Error("failed to fetch paper", logging.Fields{
+			"request_id": requestID,
+			"arxiv_id":   arxivID,
+			"error":      err.Error(),
+		})
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to fetch paper")
+	}
+
+	year := 0
+	if paper.Published != nil {
+		year = paper.Published.Year()
+	}
+	authors := []string(paper.Authors)
+	if authors == nil {
+		authors = []string{}
+	}
+
+	return c.JSON(fiber.Map{
+		"source_id": "arxiv:" + paper.ArxivID,
+		"title":     paper.Title,
+		"authors":   authors,
+		"year":      year,
+		"url":       "https://arxiv.org/abs/" + paper.ArxivID,
+	})
+}
+
 func (h *PapersHandler) Delete(c *fiber.Ctx) error {
 	requestID, _ := c.Locals("requestID").(string)
 	id, err := uuid.Parse(c.Params("id"))
