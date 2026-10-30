@@ -1,4 +1,3 @@
-# Build stage
 FROM golang:1.25-alpine AS builder
 WORKDIR /app
 RUN apk add --no-cache gcc musl-dev
@@ -20,7 +19,6 @@ ENV DB_HOST=postgres \
   DB_NAME=arxiv_db \
   ML_SERVICE_URL=http://python-ml:8001 \
   QDRANT_URL=http://qdrant:6333
-
 
 # wget localhost resolves to ::1 while Fiber binds 0.0.0.0 (IPv4) — probe the IPv4 loopback explicitly.
 HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
