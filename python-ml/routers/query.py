@@ -6,15 +6,15 @@ import state as app_state
 from engine.generation import groq_client, ollama_client
 from engine.retrieval.qdrant_client import get_client, search
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 class QueryRequest(BaseModel):
-    query: str
-    top_k: int = 5
+    query: str = Field(..., max_length=2000)
+    top_k: int = Field(5, ge=1, le=20)
     model: str = "phi3:mini"
     arxiv_id: str | None = None
 

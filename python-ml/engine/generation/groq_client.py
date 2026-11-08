@@ -3,11 +3,16 @@ import os
 import time
 from typing import Any
 
+import httpx
 from groq import Groq
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL = "llama-3.3-70b-versatile"
+
+# Explicit timeout for Groq client so hung generation requests cannot block
+# workers indefinitely (P1-7 HTTP/runtime hardening).
+GROQ_HTTP_TIMEOUT = 60.0
 
 
 class GroqError(Exception):
@@ -47,7 +52,8 @@ def generate(
     start = time.time()
 
     try:
-        client = Groq(api_key=api_key)
+        http_client = httpx.Client(timeout=GROQ_HTTP_TIMEOUT)
+        client = Groq(api_key=api_key, http_client=http_client)
         response = client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": prompt}],

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -49,15 +50,19 @@ func main() {
 	app := fiber.New(fiber.Config{
 		AppName:      "ArXiv Research Assistant v0.1.0",
 		ErrorHandler: api.ErrorHandler,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	})
 
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "*",
+		AllowOrigins: parseAllowedOrigins(getEnv("CORS_ALLOWED_ORIGINS", "")),
 		AllowMethods: "GET,POST,DELETE,OPTIONS",
 		AllowHeaders: "Content-Type,Authorization",
 	}))
 	app.Use(recover.New())
 	app.Use(middleware.RequestID())
+	app.Use(middleware.InternalServiceAuth())
 	app.Use(middleware.Metrics())
 	app.Use(logger.New(logger.Config{
 		Format: "[${time}] ${status} - ${latency} ${method} ${path} | req-id: ${respHeader:X-Request-ID}\n",
@@ -123,4 +128,18 @@ func getEnv(key, fallback string) string {
 		return val
 	}
 	return fallback
+}
+
+// parseAllowedOrigins returns a comma-separated origin list for CORS. An empty
+// input denies all cross-origin origins (secure-by-default; "*" is rejected
+// even if present in the environment).
+func parseAllowedOrigins(raw string) string {
+	origins := []string{}
+	for _, o := range strings.Split(raw, ",") {
+		o = strings.TrimSpace(o)
+		if o != "" && o != "*" {
+			origins = append(origins, o)
+		}
+	}
+	return strings.Join(origins, ",")
 }

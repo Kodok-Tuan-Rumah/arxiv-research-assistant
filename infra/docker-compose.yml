@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139
     container_name: arxiv-postgres
     environment:
       POSTGRES_USER: arxiv
@@ -20,7 +20,7 @@ services:
       - arxiv-net
 
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:latest@sha256:9bfc89f9914fc14876a88c05270685921a55b8877b254a98bcc1cc2f0a424cd2
     container_name: arxiv-qdrant
     ports:
       - "6333:6333"
@@ -36,7 +36,7 @@ services:
       - arxiv-net
 
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:latest@sha256:0e59999e0e8f9fd4e704bd788a89b7e4cad399367fb1365f8c102ac662288761
     container_name: arxiv-ollama
     ports:
       - "11435:11434"
@@ -118,7 +118,7 @@ services:
       - arxiv-net
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:latest@sha256:e04987641b57704f408e31f6373ba4138ecf27cb4a165d24aabb6c38fddd0f06
     container_name: arxiv-prometheus
     ports:
       - "9090:9090"
@@ -134,7 +134,7 @@ services:
       - arxiv-net
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:latest@sha256:488984b716c0862639f91a698adbe2862677a5a07bad42da5f03f3030883b205
     container_name: arxiv-grafana
     ports:
       - "3000:3000"

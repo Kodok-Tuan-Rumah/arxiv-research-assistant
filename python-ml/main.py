@@ -1,10 +1,12 @@
 import logging
+import os
 import uuid
 from contextlib import asynccontextmanager
 
 import state
 from engine.retrieval.qdrant_client import ensure_collection, get_client
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, status
+from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 from routers import chunk, embed, ingest, papers, query
 from sentence_transformers import SentenceTransformer
@@ -47,6 +49,27 @@ async def add_request_id(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Request-ID"] = request_id
     return response
+
+
+@app.middleware("http")
+async def internal_service_auth(request: Request, call_next):
+    exempt = {"/health", "/metrics", "/docs", "/openapi.json", "/favicon.ico"}
+    if request.url.path in exempt:
+        return await call_next(request)
+
+    expected = os.getenv("INTERNAL_SERVICE_TOKEN", "").strip()
+    if not expected:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"detail": "service not configured"},
+        )
+    got = request.headers.get("X-Internal-Service-Token", "").strip()
+    if got != expected:
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"detail": "invalid internal service token"},
+        )
+    return await call_next(request)
 
 
 @app.get("/health")
