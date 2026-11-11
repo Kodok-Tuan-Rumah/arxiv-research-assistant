@@ -11,6 +11,7 @@ FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6
 WORKDIR /app
 RUN apk add --no-cache ca-certificates tzdata
 COPY --from=builder /bin/server /bin/server
+COPY --from=builder /app/migrations /app/migrations
 EXPOSE 8080
 ENV DB_HOST=postgres \
   DB_PORT=5432 \

@@ -122,8 +122,7 @@ func runMigrations(db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("begin lock tx: %w", err)
 	}
-	var lockResult int
-	if err := tx.QueryRow("SELECT pg_advisory_xact_lock(hashtext('arxiv-go-backend-schema-migrations'))").Scan(&lockResult); err != nil {
+	if _, err := tx.Exec("SELECT pg_advisory_xact_lock(hashtext('arxiv-go-backend-schema-migrations'))"); err != nil {
 		tx.Rollback()
 		return fmt.Errorf("acquire advisory lock: %w", err)
 	}
