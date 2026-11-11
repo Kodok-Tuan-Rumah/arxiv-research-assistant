@@ -17,11 +17,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Bake the embedder into the image so runtime needs no host cache or Hub access.
 ENV HF_HOME=/app/hf-cache \
     HF_HUB_OFFLINE=0
-RUN python - <<'PY'
-from sentence_transformers import SentenceTransformer
-
-SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-PY
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
 ENV HF_HUB_OFFLINE=1
 
 COPY . .
